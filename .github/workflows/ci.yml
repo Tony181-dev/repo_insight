@@ -34,8 +34,21 @@ jobs:
           assert json.loads(out)['deep']['total'] > 0
           print('pyz ok')
           EOF
+      - name: Build release package and test install.sh
+        run: |
+          python tools/make_release.py
+          mkdir -p "$RUNNER_TEMP/rel"
+          tar xzf dist/repomap-*.tar.gz -C "$RUNNER_TEMP/rel"
+          cd "$RUNNER_TEMP"/rel/repomap-*
+          PYTHON="$(command -v python)" sh install.sh --prefix "$RUNNER_TEMP/pfx"
+          "$RUNNER_TEMP/pfx/bin/repomap" --version
+          sh install.sh --uninstall --prefix "$RUNNER_TEMP/pfx"
+          test ! -e "$RUNNER_TEMP/pfx/bin/repomap"
       - uses: actions/upload-artifact@v4
         if: matrix.python == '3.12'
         with:
-          name: repomap.pyz
-          path: dist/repomap.pyz
+          name: repomap-release
+          path: |
+            dist/repomap.pyz
+            dist/repomap-*.tar.gz
+            dist/repomap-*.zip

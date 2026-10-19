@@ -181,6 +181,21 @@ class ParserTest(unittest.TestCase):
         self.assertTrue(ver_match('', ''))
 
 
+class ReleaseTest(unittest.TestCase):
+    def test_release_package(self):
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'tools'))
+        import make_release
+        files = {n: (data, mode) for n, data, mode in make_release.release_files('9.9')}
+        self.assertEqual(set(files), {'repomap.pyz', 'install.sh', 'README.txt', 'HUONG_DAN.html', 'app.png'})
+        self.assertNotIn(b'\r', files['install.sh'][0])                     # sh tren Linux can LF
+        self.assertEqual(files['install.sh'][1], 0o755)
+        self.assertIn(b'repomap-9.9.tar.gz', files['README.txt'][0])
+        guide = files['HUONG_DAN.html'][0]
+        for secret in (b'git clone', b'release.bat', b'build.bat', b'maintainer', b'repomap/rules.py'):
+            self.assertNotIn(secret, guide)                                 # phan cho nguoi giu ma nguon da bi cat
+        self.assertIn(b'id="cai-dat"', guide)
+
+
 class SettingsTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

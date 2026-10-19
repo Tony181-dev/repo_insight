@@ -83,24 +83,38 @@ repomap/
   rules.py       bảng nhóm file + biến quan trọng (sửa ở đây để thêm loại mới)
   web/           index.html, style.css, js/{main,tree,graph,panel,util}.js
 tests/           unittest với workspace giả lập
-tools/           build_pyz.py (dùng chung cho build.bat và make pyz)
+tools/           build_pyz.py, make_release.py, install.sh, release_readme.txt (gói phát hành)
 legacy/          modmap.py - bản 1 file cũ, giữ để tham khảo, không còn phát triển
 ```
 
-CI (GitHub Actions) chạy test trên Linux với Python 3.8 và 3.12 mỗi lần push, và đính kèm
-file `repomap.pyz` đã build sẵn ở mục Artifacts của mỗi lần chạy.
+CI (GitHub Actions) chạy test trên Linux với Python 3.8 và 3.12 mỗi lần push, tạo gói phát hành,
+cài thử bằng `install.sh`, và đính kèm `repomap.pyz` cùng gói `.tar.gz`/`.zip` ở mục Artifacts.
 
 Thêm hệ build mới: thêm nhóm vào `rules.CATS`, file đánh dấu vào `classify.MARKS`,
 parser vào `parsers.parse_file`, màu vào `web/js/util.js` (`KIND_COLOR`).
 
-## Đóng gói
+## Phát hành cho người dùng (không đưa mã nguồn)
 
 ```sh
-build.bat     # Windows: chạy test rồi tạo dist\repomap.pyz (build.bat notest để bỏ test)
-make pyz      # Linux: cũng tạo dist/repomap.pyz (cùng dùng tools/build_pyz.py)
+release.bat     # Windows: chạy test rồi tạo dist\repomap-<ver>.tar.gz và .zip (release.bat notest để bỏ test)
+make release    # Linux: cùng gói như trên (cùng dùng tools/make_release.py)
+```
+
+Gói chỉ chứa `repomap.pyz`, `install.sh`, `README.txt`, `HUONG_DAN.html` (trang `docs/index.html`
+đã cắt các đoạn đánh dấu `maintainer:start/end`) và `app.png`; không có test, công cụ build hay lịch sử git.
+Người dùng cài trên máy Linux, không cần root, pip hay mạng:
+
+```sh
+tar xzf repomap-1.0.0.tar.gz && cd repomap-1.0.0 && sh install.sh   # -> ~/.local/bin/repomap
+```
+
+Lưu ý: `repomap.pyz` là file zip chứa mã Python dạng text; giải nén ra là đọc được.
+
+## Đóng gói khác
+
+```sh
+build.bat     # Windows: chỉ tạo dist\repomap.pyz (build.bat notest để bỏ test)
+make pyz      # Linux: như trên (cùng dùng tools/build_pyz.py)
 make test     # unit test
 make wheel    # dist/repomap-*.whl - pip install được, có lệnh `repomap` (cần tải setuptools từ PyPI)
 ```
-
-`repomap.pyz` là 1 file duy nhất: copy sang máy build Linux có python3 rồi chạy
-`python3 repomap.pyz ~/your_workspace_root`, không cần pip, không cần mạng.

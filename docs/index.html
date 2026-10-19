@@ -218,7 +218,8 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
   <nav aria-label="Mục lục">
     <a href="#tang">Bốn tầng</a>
     <a href="#chay">Chạy ở đâu</a>
-    <a href="#dong-goi">Đóng gói</a>
+    <a href="#cai-dat">Cài đặt</a>
+    <!-- maintainer:start --><a href="#dong-goi">Tạo gói</a><!-- maintainer:end -->
     <a href="#cau-hinh">Cấu hình</a>
     <a href="#nhan-dien">Hệ được hỗ trợ</a>
     <button id="theme" type="button">Giao diện tối</button>
@@ -277,7 +278,6 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
       <li><code>~/your_workspace_root</code>: thư mục gốc bạn đã chạy <code>repo init</code> và <code>repo sync</code>, bên trong có thư mục <code>.repo/</code>. Ví dụ <code>~/projects/android13</code>.</li>
       <li><code>your_build_server</code>: tên hoặc địa chỉ IP của máy build bạn ssh vào.</li>
       <li><code>user</code>: tài khoản ssh của bạn trên máy build.</li>
-      <li><code>your_repo_url</code>: địa chỉ git của repo chứa tool này.</li>
     </ul>
     <p>Tuỳ source nằm ở đâu, chọn một trong hai cách.</p>
   </div>
@@ -293,9 +293,12 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
         <circle class="pad tool" cx="221" cy="92" r="9"/><text class="pin-t" x="221" y="118">repomap</text>
         <circle class="pad" cx="362" cy="92" r="7"/><text class="pin-t" x="362" y="118">trình duyệt</text>
       </svg>
-      <div class="cmd"><pre>python3 -m repomap ~/your_workspace_root</pre></div>
+      <ol class="steps">
+        <li>Cài tool trên chính PC này, xem phần <a href="#cai-dat">Cài đặt</a>.</li>
+        <li>Chạy:
+          <div class="cmd"><pre>repomap ~/your_workspace_root</pre></div></li>
+      </ol>
       <p>Trình duyệt tự mở tại <code>http://127.0.0.1:8800</code>. Không cần ssh.</p>
-      <p class="sub">Lấy tool bằng <code>git clone your_repo_url</code> rồi chạy lệnh trên trong thư mục đó, hoặc dùng file <code>repomap.pyz</code> đã đóng gói như ở cách 2.</p>
     </div>
     <div>
       <h3 id="xa">Cách 2: source nằm trên máy build ở xa, bạn ssh vào</h3>
@@ -316,8 +319,8 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
         <text class="wire-t faint-t" x="421" y="118">chỉ nhận image</text>
       </svg>
       <ol class="steps">
-        <li>Copy tool lên máy build: <code>scp repomap.pyz user@your_build_server:~/bin/</code>, hoặc <code>git clone</code> ngay trên máy đó.</li>
-        <li>Trên máy build, chạy <code>python3 ~/bin/repomap.pyz ~/your_workspace_root</code>. Tool in ra một lệnh dạng:
+        <li>Cài tool trên máy build, xem phần <a href="#cai-dat">Cài đặt</a>.</li>
+        <li>Trên máy build, chạy <code>repomap ~/your_workspace_root</code>. Tool in ra một lệnh dạng:
           <div class="cmd"><pre>ssh -L 8800:127.0.0.1:8800 user@your_build_server</pre></div></li>
         <li>Trên PC của bạn, chạy lệnh đó rồi giữ cửa sổ terminal mở.</li>
         <li>Mở trình duyệt trên PC, vào <code>http://127.0.0.1:8800</code>.</li>
@@ -328,46 +331,78 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
   </div>
 </section>
 
-<section id="dong-goi">
+<section id="cai-dat">
   <div class="split">
     <div>
-      <h2>Đóng gói trên Windows</h2>
-      <p>Bạn đóng gói tool một lần trên PC Windows thành một file <code>repomap.pyz</code> khoảng 35 KB, rồi copy file đó lên máy build. Máy build chỉ cần có python3, không cần git clone, không cần pip, không cần mạng.</p>
+      <h2>Cài đặt</h2>
+      <p>Tool được phát hành dưới dạng một gói <code>repomap-1.0.0.tar.gz</code> (hoặc bản <code>.zip</code> cùng nội dung). Máy cài chỉ cần python3 bản 3.8 trở lên; không cần pip, không cần mạng, không cần quyền root.</p>
       <ol class="steps">
-        <li>Cài Python 3.8 trở lên trên Windows từ <a href="https://www.python.org/downloads/">python.org</a>. Python này chỉ dùng để đóng gói.</li>
-        <li>Lấy mã nguồn: <code>git clone your_repo_url</code>, hoặc tải file zip của repo rồi giải nén.</li>
-        <li>Bấm đúp <code>build.bat</code>, hoặc chạy trong cmd:
-          <div class="cmd"><pre>build.bat           <span class="c">rem chạy unit test rồi đóng gói</span>
-build.bat notest    <span class="c">rem bỏ qua unit test</span></pre></div>
-          Kết quả là file <code>dist\repomap.pyz</code>. Cửa sổ dừng lại ở cuối để bạn đọc kết quả, kể cả khi có lỗi; bấm phím bất kỳ để đóng.</li>
-        <li>Copy lên máy build. Windows 10 trở lên có sẵn lệnh <code>scp</code>; dùng WinSCP cũng được.
-          <div class="cmd"><pre>scp dist\repomap.pyz user@your_build_server:~/bin/</pre></div></li>
-        <li>Trên máy build, chạy như cách 2 ở trên:
-          <div class="cmd"><pre>python3 ~/bin/repomap.pyz ~/your_workspace_root</pre></div></li>
+        <li>Copy gói lên máy cần cài. Từ PC Windows 10 trở lên có sẵn lệnh <code>scp</code>; dùng WinSCP cũng được.
+          <div class="cmd"><pre>scp repomap-1.0.0.tar.gz user@your_build_server:~</pre></div></li>
+        <li>Trên máy đó, giải nén và cài:
+          <div class="cmd"><pre>tar xzf repomap-1.0.0.tar.gz
+cd repomap-1.0.0
+sh install.sh</pre></div></li>
+        <li>Lệnh được cài vào <code>~/.local/bin/repomap</code>. Nếu thư mục này chưa có trong PATH, <code>install.sh</code> in ra dòng cần thêm vào <code>~/.bashrc</code>.</li>
+        <li>Chạy thử:
+          <div class="cmd"><pre>repomap ~/your_workspace_root</pre></div></li>
       </ol>
-      <p class="sub">File copy từ Windows sang sẽ không có quyền thực thi, nên chạy qua <code>python3 repomap.pyz</code>. Muốn gõ thẳng <code>./repomap.pyz</code> thì chạy <code>chmod +x</code> một lần.</p>
+      <div class="tbl"><table class="keys">
+        <tbody>
+          <tr><td>Không muốn cài</td><td><code>python3 repomap.pyz ~/your_workspace_root</code> ngay trong thư mục giải nén.</td></tr>
+          <tr><td>Dùng Python khác</td><td><code>PYTHON=/duong/dan/python3 sh install.sh</code>; lệnh <code>repomap</code> sẽ luôn chạy bằng Python đó.</td></tr>
+          <tr><td>Cài vào thư mục khác</td><td><code>sh install.sh --prefix /opt/tools</code>, lệnh nằm ở <code>/opt/tools/bin/repomap</code>.</td></tr>
+          <tr><td>Gỡ cài đặt</td><td><code>sh install.sh --uninstall</code> (thêm <code>--prefix</code> nếu lúc cài có dùng).</td></tr>
+        </tbody>
+      </table></div>
     </div>
     <div>
-      <h3>Đóng gói trên Linux</h3>
-      <div class="cmd"><pre>make pyz                     <span class="c"># chạy test rồi đóng gói</span>
-python3 tools/build_pyz.py   <span class="c"># không cần make</span></pre></div>
-      <p>Cả hai đều tạo <code>dist/repomap.pyz</code> giống hệt bản của <code>build.bat</code>, vì cùng dùng script <code>tools/build_pyz.py</code>.</p>
-
       <h3 id="python-cu">Máy build không có Python 3.8</h3>
-      <p>Kiểm tra trước bằng <code>python3 --version</code>. Máy build Yocto hay Android thường đã có sẵn python3. Nếu thiếu hoặc quá cũ, các cách dưới đều không cần quyền root:</p>
+      <p>Kiểm tra trước bằng <code>python3 --version</code>; <code>install.sh</code> cũng tự kiểm tra và dừng lại nếu Python quá cũ. Máy build Yocto hay Android thường đã có sẵn python3. Nếu thiếu hoặc quá cũ, các cách dưới đều không cần quyền root, rồi cài bằng <code>PYTHON=... sh install.sh</code>:</p>
       <ul class="limits">
-        <li><strong>Android:</strong> sau <code>repo sync</code> thường có Python dựng sẵn trong <code>prebuilts/</code>. Tìm bằng <code>find prebuilts -path '*linux-x86*' -name 'python3*' -type f</code>, rồi chạy file <code>.pyz</code> bằng Python đó.</li>
+        <li><strong>Android:</strong> sau <code>repo sync</code> thường có Python dựng sẵn trong <code>prebuilts/</code>. Tìm bằng <code>find prebuilts -path '*linux-x86*' -name 'python3*' -type f</code>.</li>
         <li><strong>Yocto:</strong> chạy <code>poky/scripts/install-buildtools</code> để tải bộ buildtools có python3 mới, sau đó <code>source</code> file môi trường mà nó in ra.</li>
-        <li><strong>Python riêng trong thư mục home:</strong> giải nén một bản Python dựng sẵn cho Linux (dự án python-build-standalone, hoặc Miniforge) vào <code>~/opt/python</code>, rồi chạy <code>~/opt/python/bin/python3 repomap.pyz ~/your_workspace_root</code>.</li>
-        <li><strong>Chạy trên PC thay vì máy build:</strong> gắn source về PC bằng <code>sshfs your_build_server:your_workspace_root ~/your_workspace_root</code> rồi chạy repomap trên PC. Nút Quét sâu với repo lớn sẽ chậm hơn vì file phải đọc qua mạng.</li>
+        <li><strong>Python riêng trong thư mục home:</strong> giải nén một bản Python dựng sẵn cho Linux (dự án python-build-standalone, hoặc Miniforge) vào <code>~/opt/python</code>, rồi dùng <code>~/opt/python/bin/python3</code>.</li>
+        <li><strong>Chạy trên PC thay vì máy build:</strong> gắn source về PC bằng <code>sshfs your_build_server:your_workspace_root ~/your_workspace_root</code> rồi cài và chạy repomap trên PC. Nút Quét sâu với repo lớn sẽ chậm hơn vì file phải đọc qua mạng.</li>
       </ul>
 
       <h3>Không cần giao diện</h3>
-      <div class="cmd"><pre>python3 repomap.pyz ~/your_workspace_root --json kernel/linux &gt; linux.json</pre></div>
+      <div class="cmd"><pre>repomap ~/your_workspace_root --json kernel/linux &gt; linux.json</pre></div>
       <p>In ra thông tin nhanh và kết quả quét sâu của một repo dưới dạng JSON, tiện để đưa vào script.</p>
     </div>
   </div>
 </section>
+
+<!-- maintainer:start  (phan nay bi cat khoi HUONG_DAN.html trong goi phat hanh) -->
+<section id="dong-goi">
+  <div class="split">
+    <div>
+      <h2>Tạo gói phát hành</h2>
+      <p>Phần này dành cho người giữ mã nguồn. Người dùng chỉ nhận gói <code>.tar.gz</code>, không nhận repo: trong gói không có test, công cụ build hay lịch sử git.</p>
+      <ol class="steps">
+        <li>Cài Python 3.8 trở lên trên Windows từ <a href="https://www.python.org/downloads/">python.org</a>.</li>
+        <li>Lấy mã nguồn: <code>git clone your_repo_url</code>, trong đó <code>your_repo_url</code> là địa chỉ git của repo này.</li>
+        <li>Bấm đúp <code>release.bat</code>, hoặc chạy trong cmd:
+          <div class="cmd"><pre>release.bat          <span class="c">rem chạy unit test rồi tạo gói</span>
+release.bat notest   <span class="c">rem bỏ qua unit test</span></pre></div>
+          Kết quả nằm trong <code>dist\</code>: <code>repomap-1.0.0.tar.gz</code> và <code>repomap-1.0.0.zip</code>. Cửa sổ dừng lại ở cuối để bạn đọc kết quả, kể cả khi có lỗi.</li>
+        <li>Gửi file <code>.tar.gz</code> cho người dùng; họ làm theo phần <a href="#cai-dat">Cài đặt</a>.</li>
+      </ol>
+      <p>Trong gói có <code>repomap.pyz</code>, <code>install.sh</code>, <code>README.txt</code> và trang hướng dẫn này dưới tên <code>HUONG_DAN.html</code>, đã bỏ phần Tạo gói phát hành.</p>
+      <p class="sub"><code>repomap.pyz</code> là file zip chứa mã Python của tool. Gói không kèm repo, nhưng ai giải nén file <code>.pyz</code> vẫn đọc được mã.</p>
+    </div>
+    <div>
+      <h3>Chỉ cần file repomap.pyz</h3>
+      <div class="cmd"><pre>build.bat            <span class="c">rem tạo dist\repomap.pyz</span></pre></div>
+      <h3>Trên Linux</h3>
+      <div class="cmd"><pre>make release                   <span class="c"># gói .tar.gz và .zip</span>
+make pyz                       <span class="c"># chỉ repomap.pyz</span>
+python3 tools/make_release.py  <span class="c"># không cần make</span></pre></div>
+      <p>Windows và Linux cho ra cùng một gói, vì đều dùng <code>tools/build_pyz.py</code> và <code>tools/make_release.py</code>.</p>
+    </div>
+  </div>
+</section>
+<!-- maintainer:end -->
 
 <section id="cau-hinh">
   <div class="split">
@@ -452,8 +487,10 @@ workers = 0          <span class="c"># 0: tự chọn theo số CPU</span></pre>
         <li>Mỗi nhóm file gửi tối đa 600 mục về giao diện; nội dung file hiện 4000 dòng đầu.</li>
         <li>Workspace không có manifest vẫn dùng được: tool tìm các thư mục <code>.git</code> sâu tối đa 6 cấp.</li>
       </ul>
+      <!-- maintainer:start -->
       <h3>Thêm một hệ build</h3>
       <p>Nhóm file nằm trong <code>repomap/rules.py</code>, file đánh dấu trong <code>repomap/classify.py</code>, parser trong <code>repomap/parsers.py</code>. Thêm màu cho loại mới ở <code>repomap/web/js/util.js</code>. Chạy <code>make test</code> để kiểm tra.</p>
+      <!-- maintainer:end -->
     </div>
   </div>
 </section>
