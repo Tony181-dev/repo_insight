@@ -4,6 +4,7 @@
 import { $, esc, colorOf, KIND_COLOR, tail, store } from './util.js';
 import { t, tl } from './i18n.js';
 import { labelOf } from './tree.js';
+import { highlightLines, langOf } from './highlight.js';
 
 const P = $('#panel');
 
@@ -33,6 +34,10 @@ const repoLink = (path, html) => `<a class="lnk" data-a="repo" data-p="${esc(pat
 
 const lineCell = ln => `<td class="ln" data-a="line" data-n="${ln}">${ln || ''}</td>`;
 
+// "Open full source": repo -> toan bo repo; file -> thu muc chua file (= thu muc cua module), mo san file do
+const srcButton = (repo, base, file = '') => `<button data-a="src" data-repo="${esc(repo)}" data-base="${esc(base)}"
+  data-f="${esc(file)}">${t('openSource')}</button>`;
+
 // ---------------------------------------------------------------- tung loai node
 
 function dirPanel(n) {
@@ -54,7 +59,8 @@ function repoPanel(n) {
   let h = header(n, n.label, n.path)
     + tags((n.r.tags.length ? n.r.tags : [n.kind]).map(k => tag(k, KIND_COLOR[k])))
     + `<div class="btns"><button class="pri" data-a="deep">${t(d ? 'rescan' : 'deepScan')}</button>
-       <button data-a="copy" data-t="${esc(store.data.root + '/' + n.path)}">${t('copyPath')}</button></div>`;
+       <button data-a="copy" data-t="${esc(store.data.root + '/' + n.path)}">${t('copyPath')}</button>
+       ${srcButton(n.path, '')}</div>`;
 
   if (!i) return h + `<div class="load">${t('reading')}</div>`;
   if (i.error) return h + `<div class="err">${esc(i.error)}</div>`;
@@ -91,13 +97,6 @@ function refTarget(r) {
   return fileLink({ repo: r.to.repo, f: r.to.file }, esc(r.raw));
 }
 
-function highlight(line) {
-  const e = esc(line);
-  if (/^\s*(#|\/\/)/.test(line)) return `<span class="cm">${e}</span>`;
-  return e.replace(/^(\s*(?:export\s+)?)([A-Za-z_][\w.:${}\-\/]*)(\s*(?:\?\?=|\?=|::=|:=|\+=|=\+|\.=|=\.|!=|=))/,
-    '$1<span class="v">$2</span>$3');
-}
-
 function filePanel(n) {
   const v = n.fv;
   let h = header(n, tail(n.f, 1), (n.repo ? n.repo + '/' : '') + n.f);
@@ -106,6 +105,7 @@ function filePanel(n) {
 
   h += tags([tag(v.type), tag(t('lines', { n: v.lines })), tag(`${(v.size / 1024).toFixed(1)} KB`),
     store.byRepo[n.repo] ? `<a class="tag lnk" data-a="repo" data-p="${esc(n.repo)}">${t('openRepo')}</a>` : '']);
+  h += `<div class="btns">${srcButton(n.repo, n.f.includes('/') ? n.f.slice(0, n.f.lastIndexOf('/')) : '', n.f)}</div>`;
   if (v.refs.length) {
     h += h4(t('refs'), v.refs.length) + `<table class="kv">${v.refs.map(r =>
       `<tr><td>${esc(r.k)}</td><td>${refTarget(r)}</td>${lineCell(r.line)}</tr>`).join('')}</table>`;
@@ -119,8 +119,8 @@ function filePanel(n) {
       <div class="scroll"><table class="kv" id="vars">${v.vars.map(([ln, k, op, val]) =>
       `<tr>${lineCell(ln)}<td>${esc(k)} <span class="muted">${esc(op)}</span></td><td>${esc(val)}</td></tr>`).join('')}</table></div>`;
   }
-  h += h4(t('content'), v.trunc ? t('first4000') : '') + `<div class="code">${v.text.split('\n').map((l, i) =>
-    `<div id="L${i + 1}"><b>${i + 1}</b>${highlight(l)}</div>`).join('')}</div>`;
+  h += h4(t('content'), v.trunc ? t('first4000') : '') + `<div class="code">${highlightLines(v.text, langOf(n.f)).map((l, i) =>
+    `<div id="L${i + 1}"><b>${i + 1}</b>${l}</div>`).join('')}</div>`;
   return h;
 }
 
@@ -148,7 +148,7 @@ export function goLine(ln) {
 
 export const togglePanel = () => P.classList.toggle('hide');
 
-// actions: { deep(btn), open(item), repo(path), cat(id) }
+// actions: { deep(btn), open(item), repo(path), cat(id), src({repo, base, file}) }
 export function bindPanel(actions) {
   P.addEventListener('click', e => {
     const a = e.target.closest('[data-a]');
@@ -159,6 +159,7 @@ export function bindPanel(actions) {
       case 'open': return actions.open({ repo: d.repo, f: d.f, n: +d.n, l: d.l || undefined });
       case 'repo': return actions.repo(d.p);
       case 'cat': return actions.cat(d.c);
+      case 'src': return actions.src({ repo: d.repo, base: d.base, file: d.f });
       case 'line': return goLine(+d.n);
       case 'copy': navigator.clipboard?.writeText(d.t); a.textContent = t('copied'); return;
     }

@@ -4,6 +4,8 @@
   GET /api/insight?repo=PATH[&force=1] -> tang 1
   GET /api/deep?repo=PATH[&force=1]    -> tang 2
   GET /api/file?repo=PATH&f=REL        -> tang 3
+  GET /api/ls?repo=PATH&dir=REL        -> full source: noi dung 1 thu muc
+  GET /api/search?repo=PATH&base=REL&q=TEXT&mode=name|text -> full source: tim file / tim noi dung
 """
 import json
 import mimetypes
@@ -17,6 +19,7 @@ from . import __version__
 from .deepscan import deep_scan
 from .fileview import file_view
 from .insight import insight
+from .source import list_dir, search
 
 
 def load_asset(path):
@@ -70,7 +73,7 @@ def make_handler(ws):
             if ep == 'tree':
                 return self._send({'root': ws.root, 'mode': ws.mode, 'took': round(ws.took, 2),
                                    'version': __version__, 'repos': ws.repos})
-            if repo not in ws.by_path and not (ep == 'file' and repo == ''):
+            if repo not in ws.by_path and not (ep in ('file', 'ls') and repo == ''):
                 return self._send({'error': 'no such repo: ' + repo}, code=404)
             if ep == 'insight':
                 return self._send(ws.cached(('insight', repo), lambda: insight(ws, repo), force))
@@ -78,6 +81,10 @@ def make_handler(ws):
                 return self._send(ws.cached(('deep', repo), lambda: deep_scan(ws, repo), force))
             if ep == 'file':
                 return self._send(file_view(ws, repo, q.get('f', '')))
+            if ep == 'ls':
+                return self._send(list_dir(ws, repo, q.get('dir', '')))
+            if ep == 'search':
+                return self._send(search(ws, repo, q.get('base', ''), q.get('q', ''), q.get('mode', 'name')))
             self._send({'error': 'unknown api: ' + ep}, code=404)
 
     return Handler

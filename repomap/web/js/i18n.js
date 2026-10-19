@@ -27,6 +27,10 @@ const DICT = {
     refs: 'References', defs: 'Definitions', vars: 'Variables', content: 'Content',
     first4000: '(first 4000 lines)', lines: '{n} lines', openRepo: 'Open repo',
     more: '+{n} more…',
+    openSource: 'Open full source', back: '← Back', findFile: 'Find file by name…',
+    searchText: 'Search in files (Enter)…', results: '{n} results', resultsMore: '(first ones only)',
+    noResults: 'No results', searching: 'Searching…', clear: 'Clear', emptyDir: 'Empty folder',
+    pickFile: 'Pick a file on the left.', outline: 'Outline',
   },
   vi: {
     searchPh: 'Tìm repo (/), vd: kernel hoặc kind:qnx',
@@ -52,6 +56,10 @@ const DICT = {
     refs: 'Tham chiếu', defs: 'Mục định nghĩa', vars: 'Biến', content: 'Nội dung',
     first4000: '(4000 dòng đầu)', lines: '{n} dòng', openRepo: 'Mở repo',
     more: '+{n} nữa…',
+    openSource: 'Mở toàn bộ source', back: '← Quay lại', findFile: 'Tìm file theo tên…',
+    searchText: 'Tìm trong nội dung (Enter)…', results: '{n} kết quả', resultsMore: '(chỉ hiện phần đầu)',
+    noResults: 'Không có kết quả', searching: 'Đang tìm…', clear: 'Xoá', emptyDir: 'Thư mục trống',
+    pickFile: 'Chọn một file bên trái.', outline: 'Cấu trúc',
   },
 };
 

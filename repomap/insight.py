@@ -9,6 +9,7 @@ from fnmatch import fnmatch
 from .parsers import ftype, parse_file, vars_dict
 from .rules import KEYVARS
 from .util import git, listdir, read_text
+from .insight_devops import devops_sections, python_sections
 from .workspace import find_layers
 
 
@@ -119,7 +120,7 @@ def insight(ws, repo):
     dirs = [e.name for e in ents if e.is_dir() and e.name != '.git']
     files = [e.name for e in ents if e.is_file()]
     tags = p['tags']
-    keys = [n for n in files if ftype(n) != 'text' or n.lower().startswith('readme')]
+    keys = [n for n in files if ftype(n) not in ('text', 'c', 'py') or n.lower().startswith('readme')]
 
     secs = [_manifest(p), _git(d)]
     secs += _yocto(d, keys)
@@ -131,6 +132,10 @@ def insight(ws, repo):
         secs.append(_qnx(d, files))
     if 'bitbake' in tags:
         secs.append(_bitbake(d))
+    if 'python' in tags:
+        secs += python_sections(d, files, dirs, keys)
+    if 'devops' in tags:
+        secs += devops_sections(d, files, dirs, keys)
 
     keys = [k for i, k in enumerate(keys) if k not in keys[:i] and os.path.isfile(os.path.join(d, k))]
     return {'repo': repo, 'sections': [s for s in secs if s], 'keys': keys[:80], 'dirs': dirs[:200],

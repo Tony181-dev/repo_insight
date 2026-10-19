@@ -81,7 +81,65 @@ FILES = {
     'qnx/drivers/spi/common.mk': 'NAME=spi-acme\nINSTALLDIR=usr/lib\ninclude $(MKFILES_ROOT)/qtargets.mk\n',
     'qnx/drivers/spi/nto/aarch64/so.le/Makefile': 'include ../../../common.mk\n',
 
+    # C/C++ source (cho full source + #include)
+    'src/foo-app/main.c': '#include <stdio.h>\n#include "foo.h"\n#include "inner/deep.h"\n#include "deep2.h"\n'
+                          'int main(void) { return 0; }\n',
+    'src/foo-app/include/foo.h': '#pragma once\n',
+    'src/foo-app/lib/inner/deep.h': '#pragma once\n',
+    'src/foo-app/lib/inner/deep2.h': '#pragma once\n',
+    'src/foo-app/lib/a.c': 'int a;\n',
+
+    # Python + DevOps repo
     'tools/extra/README.md': '# extra',
+    'tools/extra/pyproject.toml': '''
+        [project]
+        name = "pyapp"
+        version = "0.3.1"
+        requires-python = ">=3.8"
+        dependencies = [
+          "requests>=2",
+          "click",
+        ]
+        [project.scripts]
+        pyapp = "pyapp.cli:main"
+        [build-system]
+        build-backend = "setuptools.build_meta"''',
+    'tools/extra/requirements-dev.txt': 'pytest>=7\n-r base.txt\n',
+    'tools/extra/src/pyapp/__init__.py': '',
+    'tools/extra/src/pyapp/cli.py': '''
+        import os
+        from .core import run
+        from . import util
+        from pyapp.util import helper
+
+        def main():
+            run()''',
+    'tools/extra/src/pyapp/core.py': 'class Runner:\n    def go(self):\n        pass\n\ndef run():\n    Runner().go()\n',
+    'tools/extra/src/pyapp/util.py': 'def helper():\n    return 1\n',
+    'tools/extra/tests/test_core.py': 'from pyapp.core import run\n\ndef test_run():\n    run()\n',
+    'tools/extra/Dockerfile': 'FROM python:3.11-slim AS base\nCOPY . /app\nEXPOSE 8080\nCMD ["pyapp"]\n',
+    'tools/extra/docker-compose.yml': 'services:\n  web:\n    build: .\n  db:\n    image: postgres\n',
+    'tools/extra/.gitlab-ci.yml': '''
+        stages: [build, test, deploy]
+        include:
+          - local: '/ci/common.yml'
+        .base:
+          image: python
+        build:
+          stage: build
+        unit-test:
+          stage: test''',
+    'tools/extra/ci/common.yml': 'variables:\n  X: 1\n',
+    'tools/extra/.github/workflows/ci.yml': 'name: CI\non: [push]\njobs:\n  lint:\n    runs-on: ubuntu\n  test:\n    runs-on: ubuntu\n',
+    'tools/extra/Jenkinsfile': "pipeline {\n  stages {\n    stage('Build') { steps { sh 'make' } }\n    stage('Deploy') {}\n  }\n}\n",
+    'tools/extra/main.tf': 'provider "aws" {}\nresource "aws_instance" "web" {}\nmodule "net" {\n  source = "./modules/net"\n}\n',
+    'tools/extra/modules/net/main.tf': 'resource "aws_vpc" "main" {}\n',
+    'tools/extra/ansible.cfg': '[defaults]\n',
+    'tools/extra/site.yml': '- hosts: webservers\n  roles:\n    - common\n    - role: nginx\n',
+    'tools/extra/roles/common/tasks/main.yml': '- name: x\n  debug: msg=1\n',
+    'tools/extra/roles/nginx/tasks/main.yml': '- include_tasks: extra.yml\n',
+    'tools/extra/roles/nginx/tasks/extra.yml': '- debug: msg=2\n',
+    'tools/extra/deploy.sh': '#!/bin/sh\necho deploy\n',
 }
 
 

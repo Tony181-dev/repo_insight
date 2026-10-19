@@ -1,11 +1,16 @@
-"""Parser tinh cho file build/config: BitBake, Make/Android.mk, Android.bp, Kconfig, DTS, CMake, Meson, QNX.
+"""Parser tinh cho file build/config: BitBake, Make/Android.mk, Android.bp, Kconfig, DTS, CMake, Meson, QNX,
+C/C++ (#include), Python (parsers_py) va DevOps (parsers_devops).
 
 Moi file -> {'type', 'vars': [[line, key, op, value]], 'refs': [{k, raw, line}], 'items': [{type, name, line}]}
 """
 import os
 import re
 
+from .parsers_devops import dockerfile_items, jenkins_items_refs, terraform_items_refs, yaml_items_refs
+from .parsers_py import py_refs_items
 from .util import read_text
+
+C_EXT = ('.c', '.h', '.cc', '.cpp', '.cxx', '.hh', '.hpp', '.hxx', '.ipp', '.inl')
 
 
 def ftype(rel):
@@ -13,6 +18,18 @@ def ftype(rel):
     if n.endswith(('.bb', '.bbappend', '.bbclass', '.inc')) or \
             (n.endswith(('.conf', '.conf.sample')) and '/conf/' in '/' + rel):
         return 'bb'
+    if n.endswith(C_EXT):
+        return 'c'
+    if n.endswith('.py'):
+        return 'py'
+    if n.endswith(('.yml', '.yaml')):
+        return 'yaml'
+    if n == 'Dockerfile' or n.startswith('Dockerfile.') or n.endswith('.dockerfile'):
+        return 'docker'
+    if n.startswith('Jenkinsfile') or n.endswith('.groovy'):
+        return 'groovy'
+    if n.endswith(('.tf', '.tfvars', '.hcl')):
+        return 'tf'
     if n.endswith('.bp'):
         return 'bp'
     if n.startswith('Kconfig'):
@@ -106,6 +123,7 @@ REF_RX = {
     'kconfig': [(re.compile(r'^\s*(o?r?source)\s+"?([^"\s]+)'), False)],
     'cmake': [(re.compile(r'\b(add_subdirectory|include)\s*\(\s*"?([^\s)"]+)', re.I), False)],
     'meson': [(re.compile(r"\b(subdir)\s*\(\s*'([^']+)'"), False)],
+    'c': [(re.compile(r'^\s*#\s*(include)\s*[<"]([^>"]+)'), False)],
 }
 _JUNK = re.compile(r"[(),'@]")                     # token rac tu ${@...} cua bitbake
 _PLAIN_VAR = re.compile(r'\$[({][\w/.\-]+[)}][\w/.\-${}()]*')
@@ -217,7 +235,7 @@ def qnx_build_items(text):
 def parse_file(rel, text):
     ft = ftype(rel)
     name = rel.rsplit('/', 1)[-1]
-    vars_ = parse_vars(text, ft) if ft not in ('dts', 'bp', 'cmake', 'meson') else []
+    vars_ = parse_vars(text, ft) if ft in ('bb', 'make', 'kconfig', 'defconfig', 'qnxbuild', 'text') else []
     refs = parse_refs(text, ft)
     items = []
     if ft == 'bb':
@@ -232,4 +250,14 @@ def parse_file(rel, text):
         items = cmake_items(text)
     elif ft == 'qnxbuild':
         items = qnx_build_items(text)
+    elif ft == 'py':
+        refs, items = py_refs_items(text)
+    elif ft == 'yaml':
+        items, refs = yaml_items_refs(rel, text)
+    elif ft == 'docker':
+        items = dockerfile_items(text)
+    elif ft == 'groovy':
+        items, refs = jenkins_items_refs(text)
+    elif ft == 'tf':
+        items, refs = terraform_items_refs(text)
     return {'type': ft, 'vars': vars_, 'refs': refs, 'items': items}

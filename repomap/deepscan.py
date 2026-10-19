@@ -45,7 +45,7 @@ def _group(cid, label, items, count=None):
 
 def deep_scan(ws, repo):
     t0 = time.time()
-    files, src = ws.list_files(repo)
+    files, src = ws.repo_files(repo, refresh=True)
     tagstr = ' '.join(ws.by_path[repo]['tags'])
 
     cats, ext, top = {}, Counter(), Counter()

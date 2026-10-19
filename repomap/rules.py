@@ -25,6 +25,26 @@ CATS = [
     ('kconfig', 'Kconfig', lambda p, n, t: n.startswith('Kconfig')),
     ('qnxbuild', 'QNX buildfile', lambda p, n, t: n.endswith('.build') and n != 'meson.build'),
     ('qnxmk', 'QNX common.mk / .use', lambda p, n, t: 'qnx' in t and (n == 'common.mk' or n.endswith('.use'))),
+    # DevOps
+    ('ci', 'CI pipeline', lambda p, n, t: n.startswith('Jenkinsfile') or n.startswith('.gitlab-ci')
+     or ('/.github/workflows/' in p and n.endswith(('.yml', '.yaml'))) or '/.gitlab/ci/' in p
+     or n in ('azure-pipelines.yml', 'bitbucket-pipelines.yml', '.drone.yml', '.travis.yml')),
+    ('docker', 'Docker / Compose', lambda p, n, t: n == 'Dockerfile' or n.startswith('Dockerfile.')
+     or n.endswith('.dockerfile') or n == '.dockerignore'
+     or re.match(r'(docker-)?compose[\w.\-]*\.ya?ml$', n)),
+    ('terraform', 'Terraform', lambda p, n, t: n.endswith(('.tf', '.tfvars')) or n == '.terraform.lock.hcl'),
+    ('helm', 'Helm / Kubernetes', lambda p, n, t: n in ('Chart.yaml', 'kustomization.yaml')
+     or ('devops' in t and '/templates/' in p and n.endswith(('.yaml', '.yml', '.tpl')))),
+    ('ansible', 'Ansible', lambda p, n, t: 'devops' in t and (n == 'ansible.cfg' or (n.endswith(('.yml', '.yaml'))
+     and any(d in p for d in ('/roles/', '/playbooks/', '/group_vars/', '/host_vars/', '/inventory'))))),
+    # Python
+    ('pydeps', 'Python project / dependencies', lambda p, n, t: n in (
+        'pyproject.toml', 'setup.py', 'setup.cfg', 'Pipfile', 'Pipfile.lock', 'poetry.lock', 'tox.ini',
+        'noxfile.py', 'environment.yml', 'MANIFEST.in') or re.match(r'(requirements|constraints)[\w.\-]*\.(txt|in)$', n)),
+    ('pytest', 'Python tests', lambda p, n, t: ('python' in t or 'devops' in t) and n.endswith('.py')
+     and (n.startswith('test_') or n.endswith('_test.py') or n == 'conftest.py' or '/tests/' in p or '/test/' in p)),
+    ('py', 'Python modules', lambda p, n, t: ('python' in t or 'devops' in t) and n.endswith('.py')),
+    ('shell', 'Shell scripts', lambda p, n, t: 'devops' in t and n.endswith(('.sh', '.bash'))),
     ('cmake', 'CMake', lambda p, n, t: n == 'CMakeLists.txt' or n.endswith('.cmake')),
     ('meson', 'Meson', lambda p, n, t: n in ('meson.build', 'meson_options.txt', 'meson.options')),
     ('autotools', 'Autotools', lambda p, n, t: n in ('configure.ac', 'configure.in', 'Makefile.am')),

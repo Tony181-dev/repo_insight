@@ -44,13 +44,52 @@ def _expand(ws, raw, fdir, rel):
     return raw
 
 
+def _py_candidates(ws, base, fdir, raw):
+    """'pkg.mod' / '..pkg.mod' -> cac file .py / __init__.py co the la module do."""
+    level = len(raw) - len(raw.lstrip('.'))
+    parts = [p for p in raw.lstrip('.').split('.') if p]
+    if level:
+        root = fdir
+        for _ in range(level - 1):
+            root = os.path.dirname(root)
+        roots = [root]
+    else:
+        roots = _ancestors(fdir, base) + [os.path.join(base, 'src'), os.path.join(base, 'lib')]
+        if parts and parts[0] in ws.py_packages():               # package o repo Python khac trong workspace
+            roots += ws.py_packages()[parts[0]]
+    out = []
+    for r in roots:
+        p = os.path.join(r, *parts)
+        out += [p + '.py', os.path.join(p, '__init__.py')] if parts else [os.path.join(r, '__init__.py')]
+    return out
+
+
+def _find_in_repo(ws, repo, rel, raw):
+    """#include "a/b.h" khong thay theo duong dan -> tim file cung ten trong repo, chon file gan nhat."""
+    suffix = '/' + raw.lstrip('./')
+    cands = [f for f in ws.file_index(repo).get(os.path.basename(raw), []) if ('/' + f).endswith(suffix)]
+    if not cands:
+        return []
+    here = os.path.dirname(rel).split('/')
+    near = max(cands, key=lambda f: (len(os.path.commonprefix([here, f.split('/')])), -len(f)))
+    return [ws.abs(repo, near)]
+
+
 def _candidates(ws, repo, rel, kind, raw):
     base = ws.abs(repo)
     fdir = os.path.dirname(ws.abs(repo, rel))
+    if kind == 'import':
+        return _py_candidates(ws, base, fdir, raw)
     raw = _expand(ws, raw, fdir, rel)
     if '$' in raw or not raw:
         return []
     ft = ftype(rel)
+    if kind == 'role':
+        return [os.path.join(x, 'roles', raw, 'tasks', n) for x in _ancestors(fdir, base) for n in ('main.yml', 'main.yaml')]
+    if kind == 'module':
+        d = os.path.normpath(os.path.join(fdir, raw))
+        tf = sorted(n for n in os.listdir(d) if n.endswith('.tf')) if os.path.isdir(d) else []
+        return [os.path.join(d, n) for n in (['main.tf'] if 'main.tf' in tf else tf[:1])]
     if kind == 'inherit':
         return [os.path.join(L, c, raw + '.bbclass') for L in ws.layers()
                 for c in ('classes', 'classes-recipe', 'classes-global')]
@@ -73,11 +112,13 @@ def resolve_ref(ws, repo, rel, kind, raw):
     raw = raw.strip('"\'')
     if kind == 'src':
         return _resolve_src(ws, raw)
-    for c in _candidates(ws, repo, rel, kind, raw):
-        if os.path.isfile(c):
-            o = ws.owner(c)
-            if o:
-                return {'repo': o[0], 'file': o[1]}
+    cands = [c for c in _candidates(ws, repo, rel, kind, raw) if os.path.isfile(c)]
+    if not cands and kind == 'include' and ftype(rel) == 'c':
+        cands = _find_in_repo(ws, repo, rel, raw)                # khong co include path -> tim theo ten file
+    for c in cands:
+        o = ws.owner(c)
+        if o:
+            return {'repo': o[0], 'file': o[1]}
     return None
 
 
@@ -110,10 +151,17 @@ def file_view(ws, repo, rel):
     if text is None:
         return {'error': 'binary or unreadable file'}
     res = parse_file(rel, text)
+    refs, seen = [], set()
     for r in res['refs']:
         to = resolve_ref(ws, repo, rel, r['k'], r['raw'])
         if to:
             r['to'] = to
+        key = (to['repo'], to['file']) if to else None
+        if r.pop('opt', False) and (not to or key in seen):     # 'from X import name': chi giu neu name la module
+            continue
+        seen.add(key)
+        refs.append(r)
+    res['refs'] = refs
     if rel.endswith(('.bb', '.bbappend')):
         res['refs'] += _bbappend_refs(ws, rel, path)
     lines = text.split('\n')

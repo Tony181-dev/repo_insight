@@ -7,7 +7,13 @@ from .util import read_text
 
 # thu tu uu tien: tag dau tien la `kind` chinh cua repo
 KINDS = ['yocto-layer', 'yocto-multi', 'bitbake', 'kernel', 'u-boot', 'android-device', 'android', 'qnx',
-         'cmake', 'meson', 'bazel', 'autotools', 'make', 'devicetree', 'cargo', 'go', 'gradle', 'node', 'python']
+         'cmake', 'meson', 'bazel', 'python', 'devops', 'autotools', 'make', 'devicetree', 'cargo', 'go', 'gradle',
+         'node']
+
+# file o goc repo cho thay day la repo DevOps (CI, container, ha tang)
+DEVOPS_FILES = {'Jenkinsfile', '.gitlab-ci.yml', 'Dockerfile', 'docker-compose.yml', 'docker-compose.yaml',
+                'compose.yml', 'compose.yaml', 'ansible.cfg', 'Chart.yaml', 'kustomization.yaml',
+                'azure-pipelines.yml', 'bitbucket-pipelines.yml', '.drone.yml', '.travis.yml'}
 
 MARKS = {
     'cmake': {'CMakeLists.txt'},
@@ -20,7 +26,8 @@ MARKS = {
     'go': {'go.mod'},
     'gradle': {'build.gradle', 'build.gradle.kts', 'settings.gradle', 'pom.xml'},
     'node': {'package.json'},
-    'python': {'pyproject.toml', 'setup.py', 'setup.cfg'},
+    'python': {'pyproject.toml', 'setup.py', 'setup.cfg', 'requirements.txt', 'Pipfile', 'poetry.lock',
+               'tox.ini', 'noxfile.py', 'environment.yml'},
 }
 
 QNX_MK = re.compile(r'recurse\.mk|qtargets\.mk|qmacros\.mk|\bqcc\b|QCONFIG')
@@ -62,6 +69,9 @@ def classify(d):
         t.add('qnx')
     if 'dts' in dirs or any(n.endswith(('.dts', '.dtsi')) for n in names):
         t.add('devicetree')
+    if names & DEVOPS_FILES or any(n.endswith('.tf') or n.startswith('Dockerfile.') for n in names) \
+            or ex('.github', 'workflows') or 'playbooks' in dirs or ('roles' in dirs and ex('ansible.cfg')):
+        t.add('devops')
 
     tags = [k for k in KINDS if k in t]
     return (tags[0] if tags else 'other'), tags

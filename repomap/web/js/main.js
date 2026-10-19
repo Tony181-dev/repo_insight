@@ -6,6 +6,7 @@ import { buildTree, visible, collapseAll, fillCat, loadMore, ensureChild,
 import { initGraph, render, refresh, centerOn, fit, resetView } from './graph.js';
 import { showPanel, bindPanel, togglePanel } from './panel.js';
 import { t, applyStatic, setLang, onLangChange } from './i18n.js';
+import { initSource, openSource } from './source.js';
 
 // ---------------------------------------------------------------- chon / mo node
 
@@ -82,6 +83,7 @@ bindPanel({
     const c = store.sel.children.find(x => x.cid === id);
     if (c) reveal(c);
   },
+  src: target => openSource(target),
 });
 
 // ---------------------------------------------------------------- tim kiem
@@ -197,4 +199,6 @@ onLangChange(() => {
   resetView();
   select(store.root);
   showPanel(store.root);
+  initSource();
+  if (history.state && history.state.src) openSource(history.state.src, { push: false });   // tai lai trang khi dang xem source
 })();

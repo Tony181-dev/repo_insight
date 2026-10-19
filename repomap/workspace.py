@@ -30,7 +30,7 @@ class Workspace:
         self.mode, self.took = '', 0.0
         self.repos, self.by_path, self.by_tail = [], {}, {}
         self._cache, self._lock = {}, threading.Lock()
-        self._layers = self._bb_index = None
+        self._layers = self._bb_index = self._py_pkgs = None
 
     # ---------------- tang 0
     def load(self):
@@ -107,6 +107,38 @@ class Workspace:
                     out += [os.path.normpath(os.path.join(d, L)) for L in find_layers(d)]
             self._layers = out
         return self._layers
+
+    def repo_files(self, repo, refresh=False):
+        """(files, nguon) cua repo, nho lai cho cac lan sau; refresh=True doc lai (vd khi Quet sau)."""
+        if refresh:
+            with self._lock:
+                self._cache.pop(('fidx', repo), None)
+        return self.cached(('files', repo), lambda: self.list_files(repo), force=refresh)
+
+    def file_index(self, repo):
+        """ten file -> [duong dan trong repo]; dung de tim #include theo ten."""
+        def build():
+            idx = {}
+            for f in self.repo_files(repo)[0]:
+                idx.setdefault(f.rsplit('/', 1)[-1], []).append(f)
+            return idx
+        return self.cached(('fidx', repo), build)
+
+    def py_packages(self):
+        """ten package/module cap cao -> [thu muc chua no] tren cac repo Python (de noi import giua cac repo)."""
+        if self._py_pkgs is None:
+            idx = {}
+            for p in self.repos:
+                if 'python' not in p['tags']:
+                    continue
+                base = self.abs(p['path'])
+                for root in (base, os.path.join(base, 'src')):
+                    for n in listdir(root):
+                        full = os.path.join(root, n)
+                        if os.path.isfile(os.path.join(full, '__init__.py')) or (n.endswith('.py') and os.path.isfile(full)):
+                            idx.setdefault(n[:-3] if n.endswith('.py') else n, []).append(root)
+            self._py_pkgs = idx
+        return self._py_pkgs
 
     def bb_index(self):
         """pn -> [duong dan .bb/.bbappend] tren tat ca layer."""

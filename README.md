@@ -1,7 +1,8 @@
 # repomap
 
-Xem nhanh hệ sinh thái một workspace `repo sync` (Yocto/BitBake, Android, QNX, Linux kernel/U-Boot)
-bằng giao diện web: cây repo vẽ từ manifest, bấm vào đâu thì nạp sâu vào đó.
+Xem nhanh hệ sinh thái một workspace `repo sync` (Yocto/BitBake, Android, QNX, Linux kernel/U-Boot,
+Python, DevOps) bằng giao diện web: cây repo vẽ từ manifest, bấm vào đâu thì nạp sâu vào đó,
+và mở được toàn bộ source của một module.
 
 - Chỉ cần Python 3.8+ (thư viện chuẩn), không cần mạng, không cần build workspace.
 - Phân tích tĩnh: đọc manifest, file build/config. Không chạy bitbake/make/soong.
@@ -74,7 +75,11 @@ File được tìm theo thứ tự: `--config` > `$REPOMAP_CONFIG` > `./repomap.
 | 0 | Khởi động | Đọc `.repo/manifest.xml` (include, local_manifests, remove/extend-project) → cây repo. Phân loại nhanh bằng file đánh dấu ở gốc repo. Không có manifest thì tìm thư mục `.git`. |
 | 1 | Bấm repo | Manifest, git HEAD, số file sửa; layer Yocto (collection, depends, machines…), kernel version/arch, BoardConfig/AndroidProducts, QNX variants, module ở gốc; danh sách file chính. |
 | 2 | Bấm **Quét sâu** | Toàn bộ file (`git ls-files`), gom nhóm: recipe/bbappend/machine/image, Android.bp/.mk + module, defconfig/dts/Kconfig, QNX buildfile/variant, CMake/Meson/Make… |
-| 3 | Bấm file | Biến, module/target, tham chiếu đã resolve: `require/include/inherit`, `inherit-product`, `#include` dts, `source` Kconfig, `add_subdirectory`, recipe ↔ bbappend, `SRC_URI` → repo trong manifest. Bấm tiếp để đi sâu. |
+| 3 | Bấm file | Biến, module/target, tham chiếu đã resolve: `require/include/inherit`, `inherit-product`, `#include` dts và C/C++, `source` Kconfig, `add_subdirectory`, recipe ↔ bbappend, `SRC_URI` → repo trong manifest, Python `import`, GitLab CI `include`, Ansible role/`import_tasks`, Terraform module. Bấm tiếp để đi sâu. |
+| + | Bấm **Open full source** | Ở panel repo (cả repo) hoặc file (thư mục của module): cây thư mục nạp lười + nội dung có tô màu, tìm file theo tên, tìm nội dung (`git grep`), bấm tham chiếu để nhảy file. **← Back** (hoặc Esc / nút Back của trình duyệt) quay lại cây. |
+
+Python: đọc `pyproject.toml`/`setup.cfg`/`setup.py`/`requirements*.txt` (tên, version, phụ thuộc, package, test),
+`import` bằng `ast`. DevOps: Jenkins, GitLab CI, GitHub Actions, Docker/Compose, Ansible, Terraform, Helm.
 
 ## Cấu trúc
 
@@ -89,10 +94,14 @@ repomap/
   classify.py    phân loại nhanh repo                     (tầng 0)
   insight.py     thông tin nhanh 1 repo                   (tầng 1)
   deepscan.py    quét sâu 1 repo                          (tầng 2)
+  insight_devops.py  thông tin nhanh Python + DevOps        (tầng 1)
   fileview.py    xem 1 file + resolve tham chiếu          (tầng 3)
-  parsers.py     parser BitBake/Make/Android.bp/Kconfig/DTS/CMake/QNX
+  source.py      Open full source: liệt kê thư mục, tìm file / tìm nội dung
+  parsers.py     parser BitBake/Make/Android.bp/Kconfig/DTS/CMake/QNX/C-C++
+  parsers_py.py  parser Python (ast) + đọc TOML tối giản
+  parsers_devops.py  parser YAML CI/Ansible/compose, Dockerfile, Jenkinsfile, Terraform
   rules.py       bảng nhóm file + biến quan trọng (sửa ở đây để thêm loại mới)
-  web/           index.html, style.css, js/{main,tree,graph,panel,util,i18n}.js
+  web/           index.html, style.css, js/{main,tree,graph,panel,source,highlight,util,i18n}.js
 tests/           unittest với workspace giả lập
 tools/           build_pyz.py, make_release.py, install.sh, release_readme.txt (gói phát hành)
 legacy/          modmap.py - bản 1 file cũ, giữ để tham khảo, không còn phát triển

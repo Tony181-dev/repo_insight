@@ -3,7 +3,8 @@ import os
 import subprocess
 
 # thu muc khong bao gio di vao khi walk
-NOWALK = {'.git', '.repo', 'node_modules', '__pycache__', 'out', 'sstate-cache', 'downloads'}
+NOWALK = {'.git', '.repo', 'node_modules', '__pycache__', 'out', 'sstate-cache', 'downloads',
+          '.venv', 'venv', '.tox', '.nox', '.mypy_cache', '.pytest_cache', '.terraform', 'site-packages'}
 
 
 def read_text(path, limit=512 * 1024):
@@ -13,7 +14,9 @@ def read_text(path, limit=512 * 1024):
             data = f.read(limit)
     except OSError:
         return None
-    return None if b'\0' in data[:8192] else data.decode('utf-8', 'replace')
+    if b'\0' in data[:8192]:
+        return None
+    return data.decode('utf-8', 'replace').replace('\r\n', '\n')        # file CRLF: regex '$' van khop
 
 
 def listdir(path):

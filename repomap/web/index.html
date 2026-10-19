@@ -36,6 +36,19 @@
     <aside id="panel">
       <div class="muted" data-i18n-html="help"></div>
     </aside>
+
+    <section id="source" hidden>
+      <div class="src-bar">
+        <button id="src-back" data-i18n="back"></button>
+        <div id="src-title"></div>
+        <input id="src-find" data-i18n-ph="findFile" autocomplete="off">
+        <input id="src-grep" data-i18n-ph="searchText" autocomplete="off">
+      </div>
+      <div class="src-body">
+        <nav id="src-tree"></nav>
+        <div id="src-view"></div>
+      </div>
+    </section>
   </main>
 
   <script type="module" src="js/main.js"></script>

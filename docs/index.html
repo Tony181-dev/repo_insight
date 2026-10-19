@@ -24,6 +24,8 @@
   --k-android: #1d7a3e;
   --k-qnx: #1f4fc4;
   --k-cmake: #0f6f68;
+  --k-py: #2f6fb8;
+  --k-devops: #a3309f;
   --k-dir: #6c776f;
   --k-cat: #7a3fb0;
   --k-file: #3b4a42;
@@ -38,7 +40,7 @@
   :root:not([data-theme="light"]) {
     --paper: #161d19; --sheet: #1d2621; --ink: #dce4dd; --muted: #95a39a; --rule: #34423a;
     --grid: #1f2923; --grid-major: #28342d; --trace: #6cc08f; --net: #ff7a6b;
-    --k-yocto: #f0a83a; --k-kernel: #ff7b72; --k-android: #5fd38a; --k-qnx: #7aa7ff; --k-cmake: #3fc7b9;
+    --k-yocto: #f0a83a; --k-kernel: #ff7b72; --k-android: #5fd38a; --k-qnx: #7aa7ff; --k-cmake: #3fc7b9; --k-py: #78aef0; --k-devops: #e879f9;
     --k-dir: #8e9a92; --k-cat: #c79cff; --k-file: #b8c4bc; --code-bg: #121815; --hl: #4a3d12;
     color-scheme: dark;
   }
@@ -46,7 +48,7 @@
 :root[data-theme="dark"] {
   --paper: #161d19; --sheet: #1d2621; --ink: #dce4dd; --muted: #95a39a; --rule: #34423a;
   --grid: #1f2923; --grid-major: #28342d; --trace: #6cc08f; --net: #ff7a6b;
-  --k-yocto: #f0a83a; --k-kernel: #ff7b72; --k-android: #5fd38a; --k-qnx: #7aa7ff; --k-cmake: #3fc7b9;
+  --k-yocto: #f0a83a; --k-kernel: #ff7b72; --k-android: #5fd38a; --k-qnx: #7aa7ff; --k-cmake: #3fc7b9; --k-py: #78aef0; --k-devops: #e879f9;
   --k-dir: #8e9a92; --k-cat: #c79cff; --k-file: #b8c4bc; --code-bg: #121815; --hl: #4a3d12;
   color-scheme: dark;
 }
@@ -239,7 +241,7 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
         <div class="full name">repomap<small>Bản đồ workspace repo sync</small></div>
         <div><span>Phiên bản</span>1.0.0</div>
         <div><span>Cần</span>Python 3.8+</div>
-        <div class="full"><span>Hệ nhận diện</span>Yocto, Android, QNX, Linux</div>
+        <div class="full"><span>Hệ nhận diện</span>Yocto, Android, QNX, Linux, Python, DevOps</div>
         <div class="full last"><span>Tầng đang xem</span><b id="layer-now">0 cây repo</b></div>
       </div>
     </div>
@@ -476,10 +478,18 @@ workers = 0          <span class="c"># 0: tự chọn theo số CPU</span></pre>
         <td><code>Kconfig</code> cùng <code>arch/</code>, <code>kernel/</code>, <code>mm/</code> (U-Boot: <code>board/</code>, <code>cmd/</code>)</td>
         <td>Phiên bản từ Makefile, danh sách arch và số defconfig của từng arch</td>
         <td><code>#include</code> trong device tree, <code>source</code> trong Kconfig</td></tr>
+      <tr><td><span class="sw" style="background:var(--k-py)"></span>Python</td>
+        <td><code>pyproject.toml</code>, <code>setup.py</code>, <code>setup.cfg</code>, <code>requirements*.txt</code>, <code>Pipfile</code>, <code>tox.ini</code></td>
+        <td>Tên, version, <code>requires-python</code>, build backend, lệnh console, danh sách thư viện phụ thuộc, package, framework test</td>
+        <td><code>import</code> và <code>from … import</code> (kể cả import tương đối, và import sang repo Python khác trong workspace); danh sách class, hàm, method</td></tr>
+      <tr><td><span class="sw" style="background:var(--k-devops)"></span>DevOps</td>
+        <td><code>Jenkinsfile</code>, <code>.gitlab-ci.yml</code>, <code>.github/workflows/</code>, <code>Dockerfile</code>, compose, <code>ansible.cfg</code>, <code>playbooks/</code>, <code>*.tf</code>, <code>Chart.yaml</code></td>
+        <td>Stage và job của pipeline, image <code>FROM</code> và port, service của compose, host của playbook và role, provider/module/resource Terraform, thông tin Helm chart</td>
+        <td><code>include</code> của GitLab CI, <code>import_tasks</code>/<code>include_tasks</code> và role của Ansible, <code>source</code> module của Terraform, <code>load</code> trong Jenkinsfile</td></tr>
       <tr><td><span class="sw" style="background:var(--k-cmake)"></span>Các hệ khác</td>
-        <td>CMake, Meson, Make, Autotools, Bazel, Cargo, Go, Gradle, Node, Python</td>
+        <td>CMake, Meson, Make, Autotools, Bazel, Cargo, Go, Gradle, Node</td>
         <td>Tên project và target CMake, các biến chính trong Makefile</td>
-        <td><code>add_subdirectory</code>, <code>include()</code> của CMake, <code>subdir()</code> của Meson, <code>include</code> của Make</td></tr>
+        <td><code>add_subdirectory</code>, <code>include()</code> của CMake, <code>subdir()</code> của Meson, <code>include</code> của Make; <code>#include</code> của C/C++</td></tr>
     </tbody>
   </table></div>
 </section>
@@ -497,6 +507,8 @@ workers = 0          <span class="c"># 0: tự chọn theo số CPU</span></pre>
           <tr><td>Nút Deep scan (Quét sâu)</td><td>Trong panel của repo. Bấm lần nữa (Rescan) để quét lại sau khi bạn đổi file.</td></tr>
           <tr><td>Số dòng trong panel</td><td>Nhảy tới dòng đó trong phần nội dung file.</td></tr>
           <tr><td>Fit, Expand one level, Collapse</td><td>Căn bản vẽ vừa màn hình, mở rộng mọi thư mục đang thấy thêm một cấp, hoặc đóng hết về gốc.</td></tr>
+          <tr><td>Nút Open full source</td><td>Trong panel của repo (mở cả repo) hoặc của file (mở thư mục chứa file, tức thư mục của module như Android module hay QNX variant). Hiện cây thư mục bên trái, nội dung file có tô màu bên phải. Bấm vào tham chiếu (<code>#include</code>, <code>import</code>…) để mở file đó, kể cả khi nó ở repo khác.</td></tr>
+          <tr><td>Trong màn hình source</td><td>Ô <em>Find file by name</em> tìm theo tên file; ô <em>Search in files</em> (bấm Enter) tìm nội dung bằng <code>git grep</code>. Nút <strong>← Back</strong>, phím Esc hoặc nút Back của trình duyệt đưa về đúng chỗ cũ trên cây.</td></tr>
           <tr><td>Nút EN / VI</td><td>Cạnh ô tìm kiếm. Đổi giao diện giữa tiếng Anh (mặc định) và tiếng Việt; trình duyệt nhớ lựa chọn cho lần sau.</td></tr>
         </tbody>
       </table></div>
@@ -507,6 +519,8 @@ workers = 0          <span class="c"># 0: tự chọn theo số CPU</span></pre>
         <li>repomap không chạy bitbake, make hay soong. Biến chỉ được thay ở các dạng đơn giản như <code>$(LOCAL_PATH)</code>, <code>${THISDIR}</code>, <code>${PN}</code>; tham chiếu còn biến khác sẽ hiện nhưng không bấm sang được.</li>
         <li>Override của BitBake và biểu thức <code>${@...}</code> không được tính.</li>
         <li>Thư viện phụ thuộc của Android module chỉ hiện tên, chưa nối sang repo định nghĩa module đó.</li>
+        <li><code>#include</code> của C/C++ được nối theo kiểu đoán tốt nhất: cùng thư mục, thư mục cha, <code>include/</code>, rồi tìm file cùng tên trong repo. Khi chưa build thì không có include path thật, nên có lúc sẽ nối nhầm hoặc không nối được. <code>#include &lt;…&gt;</code> của thư viện hệ thống không nối.</li>
+        <li>YAML (CI, Ansible, compose) được đọc theo thụt lề, không dùng thư viện YAML; anchor, alias và cú pháp phức tạp có thể bị bỏ qua.</li>
         <li>Mỗi nhóm file gửi tối đa 600 mục về giao diện; nội dung file hiện 4000 dòng đầu.</li>
         <li>Workspace không có manifest vẫn dùng được: tool tìm các thư mục <code>.git</code> sâu tối đa 6 cấp.</li>
       </ul>

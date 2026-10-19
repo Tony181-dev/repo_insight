@@ -22,7 +22,7 @@ export const KIND_COLOR = {
   'u-boot': '#ec4899', 'android-device': '#2fbf71', 'android': '#9ad94a', 'qnx': '#3b82f6',
   'cmake': '#14b8a6', 'meson': '#06b6d4', 'bazel': '#10b981', 'autotools': '#a8a29e', 'make': '#94a3b8',
   'devicetree': '#a78bfa', 'cargo': '#fb923c', 'go': '#38bdf8', 'gradle': '#65a30d', 'node': '#facc15',
-  'python': '#60a5fa', 'other': '#6b7280', 'missing': '#3f3f46',
+  'python': '#60a5fa', 'devops': '#e879f9', 'other': '#6b7280', 'missing': '#3f3f46',
 };
 
 export function colorOf(n) {

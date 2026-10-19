@@ -24,6 +24,7 @@ from repomap.fileview import file_view, ver_match  # noqa: E402
 from repomap.insight import insight  # noqa: E402
 from repomap.parsers import bp_modules, parse_file, parse_vars  # noqa: E402
 from repomap.server import start_server  # noqa: E402
+from repomap.source import list_dir, search  # noqa: E402
 from repomap.workspace import Workspace  # noqa: E402
 
 
@@ -117,6 +118,65 @@ class WorkspaceTest(unittest.TestCase):
         self.assertIn(('include', 'qnx/drivers/spi', 'common.mk'),
                       self.refs('qnx/drivers/spi', 'nto/aarch64/so.le/Makefile'))
 
+    def test_c_includes(self):
+        refs = self.refs('src/foo-app', 'main.c')
+        self.assertIn(('include', 'src/foo-app', 'include/foo.h'), refs)
+        self.assertIn(('include', 'src/foo-app', 'lib/inner/deep.h'), refs)
+        self.assertIn(('include', 'src/foo-app', 'lib/inner/deep2.h'), refs)     # chi tim duoc theo ten file
+
+    # ---- Python / DevOps
+    def test_python_devops_classify_and_insight(self):
+        self.assertEqual(self.ws.by_path['tools/extra']['tags'], ['python', 'devops'])
+        py = self.section('tools/extra', 'Python')
+        self.assertEqual((py['name'], py['version'], py['requires-python']), ('pyapp', '0.3.1', '>=3.8'))
+        self.assertIn('requests', py['dependencies'])
+        self.assertEqual(py['packages'], 'src/pyapp')
+        self.assertEqual(self.section('tools/extra', 'GitLab CI')['stages'], 'build, test, deploy')
+        self.assertIn('unit-test', self.section('tools/extra', 'GitLab CI')['jobs'])
+        self.assertIn('lint, test', self.section('tools/extra', 'GitHub Actions')['CI'])
+        self.assertIn('Build, Deploy', self.section('tools/extra', 'Jenkins')['Jenkinsfile'])
+        self.assertIn('FROM python:3.11-slim', self.section('tools/extra', 'Docker')['Dockerfile'])
+        self.assertIn('web, db', self.section('tools/extra', 'Docker')['docker-compose.yml'])
+        self.assertEqual(self.section('tools/extra', 'Ansible')['roles'], 'common, nginx')
+        self.assertEqual(self.section('tools/extra', 'Terraform')['providers'], 'aws')
+
+    def test_python_devops_deep_scan(self):
+        cats = self.cats('tools/extra')
+        for cid in ('ci', 'docker', 'terraform', 'ansible', 'pydeps', 'pytest', 'py', 'shell'):
+            self.assertIn(cid, cats)
+        self.assertEqual(cats['ci']['count'], 3)                  # .gitlab-ci.yml, workflow, Jenkinsfile
+
+    def test_python_and_devops_refs(self):
+        refs = self.refs('tools/extra', 'src/pyapp/cli.py')
+        self.assertIn(('import', 'tools/extra', 'src/pyapp/core.py'), refs)
+        self.assertIn(('import', 'tools/extra', 'src/pyapp/util.py'), refs)
+        self.assertIn(('import', 'tools/extra', 'src/pyapp/core.py'), self.refs('tools/extra', 'tests/test_core.py'))
+        self.assertIn(('include', 'tools/extra', 'ci/common.yml'), self.refs('tools/extra', '.gitlab-ci.yml'))
+        self.assertIn(('role', 'tools/extra', 'roles/nginx/tasks/main.yml'), self.refs('tools/extra', 'site.yml'))
+        self.assertIn(('include_tasks', 'tools/extra', 'roles/nginx/tasks/extra.yml'),
+                      self.refs('tools/extra', 'roles/nginx/tasks/main.yml'))
+        self.assertIn(('module', 'tools/extra', 'modules/net/main.tf'), self.refs('tools/extra', 'main.tf'))
+        items = file_view(self.ws, 'tools/extra', 'src/pyapp/core.py')['items']
+        self.assertEqual([(i['type'], i['name']) for i in items], [('class', 'Runner'), ('method', 'Runner.go'), ('def', 'run')])
+
+    # ---- full source
+    def test_list_dir(self):
+        d = list_dir(self.ws, 'tools/extra', 'src/pyapp')
+        self.assertEqual([f['name'] for f in d['files']], ['__init__.py', 'cli.py', 'core.py', 'util.py'])
+        nested = list_dir(self.ws, '', 'device/acme')
+        self.assertEqual(nested['dirs'], [{'name': 'board', 'repo': 'device/acme/board'},
+                                          {'name': 'common', 'repo': 'device/acme/common'}])
+        self.assertIn('error', list_dir(self.ws, 'tools/extra', 'nope'))
+        with self.assertRaises(ValueError):
+            list_dir(self.ws, 'tools/extra', '../../..')
+
+    def test_search(self):
+        names = search(self.ws, 'tools/extra', '', 'core', 'name')['results']
+        self.assertEqual(names[0]['f'], 'src/pyapp/core.py')                    # khop ten file truoc
+        text = search(self.ws, 'tools/extra', 'src', 'DEF RUN', 'text')['results']
+        self.assertEqual(text, [{'f': 'src/pyapp/core.py', 'n': 5, 'text': 'def run():'}])
+        self.assertIn('error', search(self.ws, 'tools/extra', '', 'x', 'name'))
+
     def test_file_view_errors(self):
         self.assertIn('error', file_view(self.ws, 'kernel/linux', 'nope.c'))
 
@@ -131,6 +191,11 @@ class WorkspaceTest(unittest.TestCase):
             self.assertIn(b'buildTree', get('/js/main.js'))
             tree = json.loads(get('/api/tree'))
             self.assertEqual(len(tree['repos']), len(self.ws.repos))
+            ls = json.loads(get('/api/ls?repo=tools/extra&dir=src'))
+            self.assertEqual(ls['dirs'], [{'name': 'pyapp'}])
+            hits = json.loads(get('/api/search?repo=tools/extra&q=helper&mode=text'))['results']
+            self.assertTrue(any(h['f'] == 'src/pyapp/util.py' for h in hits))
+            self.assertIn(b'openSource', get('/js/source.js') + get('/js/i18n.js'))
             ins = json.loads(get('/api/insight?repo=kernel/linux'))
             self.assertTrue(ins['keys'])
             with self.assertRaises(Exception):
