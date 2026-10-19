@@ -1,8 +1,13 @@
+import contextlib
+import io
 import json
 import os
+import socket
+import struct
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from urllib.request import urlopen
 
@@ -131,6 +136,24 @@ class WorkspaceTest(unittest.TestCase):
         finally:
             srv.shutdown()
             srv.server_close()
+
+    def test_server_quiet_on_client_reset(self):
+        """Client ngat ket noi dot ngot (trinh duyet huy request) khong duoc in traceback."""
+        srv = start_server(self.ws, '127.0.0.1', 0)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        err = io.StringIO()
+        try:
+            with contextlib.redirect_stderr(err):
+                for _ in range(3):
+                    s = socket.create_connection(srv.server_address, timeout=5)
+                    s.sendall(b'GET /api/tr')                        # request dang do
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
+                    s.close()                                        # -> RST
+                time.sleep(0.5)
+        finally:
+            srv.shutdown()
+            srv.server_close()
+        self.assertNotIn('Traceback', err.getvalue())
 
 
 class ParserTest(unittest.TestCase):

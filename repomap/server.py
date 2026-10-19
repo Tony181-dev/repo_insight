@@ -9,6 +9,7 @@ import json
 import mimetypes
 import pkgutil
 import posixpath
+import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -59,6 +60,8 @@ def make_handler(ws):
                 if name.endswith('.js'):
                     ctype = 'text/javascript'
                 self._send(data, ctype + '; charset=utf-8')
+            except ConnectionError:      # trinh duyet da huy request - khong con ai de tra loi
+                pass
             except Exception as e:  # noqa: BLE001 - tra loi loi cho UI thay vi dong ket noi
                 self._send({'error': '%s: %s' % (type(e).__name__, e)}, code=500)
 
@@ -80,12 +83,20 @@ def make_handler(ws):
     return Handler
 
 
+class Server(ThreadingHTTPServer):
+    def handle_error(self, request, client_address):
+        # Client ngat ket noi giua chung (huy request, dong tab, reset) la binh thuong, khong in traceback.
+        if isinstance(sys.exc_info()[1], ConnectionError):
+            return
+        super().handle_error(request, client_address)
+
+
 def start_server(ws, host='127.0.0.1', port=8800, tries=20):
     """Mo server o cong trong dau tien trong [port, port+tries)."""
     handler = make_handler(ws)
     for p in range(port, port + tries):
         try:
-            return ThreadingHTTPServer((host, p), handler)
+            return Server((host, p), handler)
         except OSError:
             continue
     raise SystemExit('khong mo duoc cong %d..%d' % (port, port + tries - 1))
