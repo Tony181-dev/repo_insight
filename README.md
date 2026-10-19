@@ -12,14 +12,22 @@ Trang hướng dẫn có bản vẽ minh hoạ bấm thử được: [docs/index
 
 ## Chạy
 
+Trong các lệnh dưới đây, thay các tên mẫu bằng giá trị thật của bạn:
+
+| Tên mẫu | Là gì | Ví dụ |
+|---|---|---|
+| `~/your_workspace_root` | thư mục gốc bạn đã chạy `repo init` / `repo sync`, bên trong có thư mục `.repo/` | `~/projects/android13` |
+| `your_build_server` | tên hoặc IP máy build bạn ssh vào | `10.0.0.25` |
+| `user` | tài khoản ssh trên máy build | `dev` |
+
 ```sh
-python3 -m repomap /path/to/workspace            # từ source
-./dist/repomap.pyz /path/to/workspace            # bản đóng gói 1 file
-repomap /path/to/workspace --port 9000 --no-browser
-repomap /path/to/workspace --json vendor/foo     # in JSON insight + quét sâu 1 repo
+python3 -m repomap ~/your_workspace_root            # từ source
+./dist/repomap.pyz ~/your_workspace_root            # bản đóng gói 1 file
+repomap ~/your_workspace_root --port 9000 --no-browser
+repomap ~/your_workspace_root --json vendor/foo     # in JSON insight + quét sâu 1 repo
 ```
 
-Máy build ở xa: chạy `repomap /ws` trên máy đó, tool in sẵn lệnh tunnel đúng port, ví dụ
+Máy build ở xa: chạy `repomap ~/your_workspace_root` trên máy đó, tool in sẵn lệnh tunnel đúng port, ví dụ
 `ssh -L 8800:127.0.0.1:8800 user@your_build_server`; chạy lệnh đó trên máy bạn rồi mở http://127.0.0.1:8800.
 
 ## Cấu hình
@@ -27,7 +35,7 @@ Máy build ở xa: chạy `repomap /ws` trên máy đó, tool in sẵn lệnh tu
 ```sh
 repomap --init-config                 # tạo ~/.config/repomap/config.ini (có chú thích)
 repomap --init-config ./repomap.ini   # hoặc file cấu hình riêng cho thư mục hiện tại
-repomap /ws --config my.ini           # chỉ định file
+repomap ~/your_workspace_root --config my.ini           # chỉ định file
 ```
 
 ```ini
@@ -95,4 +103,4 @@ make wheel    # dist/repomap-*.whl - pip install được, có lệnh `repomap` 
 ```
 
 `repomap.pyz` là 1 file duy nhất: copy sang máy build Linux có python3 rồi chạy
-`python3 repomap.pyz ~/work/ws`, không cần pip, không cần mạng.
+`python3 repomap.pyz ~/your_workspace_root`, không cần pip, không cần mạng.

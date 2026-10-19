@@ -1,4 +1,4 @@
-"""Dong lenh: repomap /path/to/workspace [--port N] [--host H] [--config FILE] [--json REPO]"""
+"""Dong lenh: repomap ~/your_workspace_root [--port N] [--host H] [--config FILE] [--json REPO]"""
 import argparse
 import json
 import os

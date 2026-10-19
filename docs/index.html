@@ -184,6 +184,8 @@ td:first-child { font: 600 17px/1.3 var(--display); white-space: nowrap; }
 .keys td:first-child { font: 400 15px var(--text); white-space: normal; width: 34%; }
 
 .limits li { margin-bottom: 8px; }
+.names { padding-left: 1.2em; margin: 0 0 14px; }
+.names li { margin-bottom: 6px; }
 
 footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 40px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 15px; color: var(--muted); }
 
@@ -270,6 +272,12 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
     <h2>Chạy ở đâu</h2>
     <p>repomap phải chạy <strong>trên máy đang chứa source code</strong>, tức thư mục bạn đã <code>repo sync</code> về, vì nó đọc trực tiếp manifest, Makefile, file <code>.bb</code>… trên ổ đĩa.</p>
     <p>Không cài lên board. Board chỉ chạy image đã build xong; trên đó không có source nên tool không có gì để đọc.</p>
+    <p>Trong các lệnh trên trang này, thay các tên mẫu bằng giá trị thật của bạn:</p>
+    <ul class="names">
+      <li><code>~/your_workspace_root</code>: thư mục gốc bạn đã chạy <code>repo init</code> và <code>repo sync</code>, bên trong có thư mục <code>.repo/</code>. Ví dụ <code>~/projects/android13</code>.</li>
+      <li><code>your_build_server</code>: tên hoặc địa chỉ IP của máy build bạn ssh vào.</li>
+      <li><code>user</code>: tài khoản ssh của bạn trên máy build.</li>
+    </ul>
     <p>Tuỳ source nằm ở đâu, chọn một trong hai cách.</p>
   </div>
 
@@ -284,7 +292,7 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
         <circle class="pad tool" cx="221" cy="92" r="9"/><text class="pin-t" x="221" y="118">repomap</text>
         <circle class="pad" cx="362" cy="92" r="7"/><text class="pin-t" x="362" y="118">trình duyệt</text>
       </svg>
-      <div class="cmd"><pre>python3 -m repomap ~/work/ws</pre></div>
+      <div class="cmd"><pre>python3 -m repomap ~/your_workspace_root</pre></div>
       <p>Trình duyệt tự mở tại <code>http://127.0.0.1:8800</code>. Không cần ssh.</p>
       <p class="sub">Lấy tool bằng <code>git clone https://github.com/Tony181-dev/repo_insight.git</code> rồi chạy lệnh trên trong thư mục đó, hoặc dùng file <code>repomap.pyz</code> đã đóng gói như ở cách 2.</p>
     </div>
@@ -307,8 +315,8 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
         <text class="wire-t faint-t" x="421" y="118">chỉ nhận image</text>
       </svg>
       <ol class="steps">
-        <li>Copy tool lên máy build: <code>scp repomap.pyz your_build_server:~/bin/</code>, hoặc <code>git clone</code> ngay trên máy đó.</li>
-        <li>Trên máy build, chạy <code>python3 ~/bin/repomap.pyz ~/work/ws</code>. Tool in ra một lệnh dạng:
+        <li>Copy tool lên máy build: <code>scp repomap.pyz user@your_build_server:~/bin/</code>, hoặc <code>git clone</code> ngay trên máy đó.</li>
+        <li>Trên máy build, chạy <code>python3 ~/bin/repomap.pyz ~/your_workspace_root</code>. Tool in ra một lệnh dạng:
           <div class="cmd"><pre>ssh -L 8800:127.0.0.1:8800 user@your_build_server</pre></div></li>
         <li>Trên PC của bạn, chạy lệnh đó rồi giữ cửa sổ terminal mở.</li>
         <li>Mở trình duyệt trên PC, vào <code>http://127.0.0.1:8800</code>.</li>
@@ -334,7 +342,7 @@ build.bat notest    <span class="c">rem bỏ qua unit test</span></pre></div>
         <li>Copy lên máy build. Windows 10 trở lên có sẵn lệnh <code>scp</code>; dùng WinSCP cũng được.
           <div class="cmd"><pre>scp dist\repomap.pyz user@your_build_server:~/bin/</pre></div></li>
         <li>Trên máy build, chạy như cách 2 ở trên:
-          <div class="cmd"><pre>python3 ~/bin/repomap.pyz ~/work/ws</pre></div></li>
+          <div class="cmd"><pre>python3 ~/bin/repomap.pyz ~/your_workspace_root</pre></div></li>
       </ol>
       <p class="sub">File copy từ Windows sang sẽ không có quyền thực thi, nên chạy qua <code>python3 repomap.pyz</code>. Muốn gõ thẳng <code>./repomap.pyz</code> thì chạy <code>chmod +x</code> một lần.</p>
     </div>
@@ -349,12 +357,12 @@ python3 tools/build_pyz.py   <span class="c"># không cần make</span></pre></d
       <ul class="limits">
         <li><strong>Android:</strong> sau <code>repo sync</code> thường có Python dựng sẵn trong <code>prebuilts/</code>. Tìm bằng <code>find prebuilts -path '*linux-x86*' -name 'python3*' -type f</code>, rồi chạy file <code>.pyz</code> bằng Python đó.</li>
         <li><strong>Yocto:</strong> chạy <code>poky/scripts/install-buildtools</code> để tải bộ buildtools có python3 mới, sau đó <code>source</code> file môi trường mà nó in ra.</li>
-        <li><strong>Python riêng trong thư mục home:</strong> giải nén một bản Python dựng sẵn cho Linux (dự án python-build-standalone, hoặc Miniforge) vào <code>~/opt/python</code>, rồi chạy <code>~/opt/python/bin/python3 repomap.pyz ~/work/ws</code>.</li>
-        <li><strong>Chạy trên PC thay vì máy build:</strong> gắn source về PC bằng <code>sshfs your_build_server:/home/you/work/ws ~/ws</code> rồi chạy repomap trên PC. Nút Quét sâu với repo lớn sẽ chậm hơn vì file phải đọc qua mạng.</li>
+        <li><strong>Python riêng trong thư mục home:</strong> giải nén một bản Python dựng sẵn cho Linux (dự án python-build-standalone, hoặc Miniforge) vào <code>~/opt/python</code>, rồi chạy <code>~/opt/python/bin/python3 repomap.pyz ~/your_workspace_root</code>.</li>
+        <li><strong>Chạy trên PC thay vì máy build:</strong> gắn source về PC bằng <code>sshfs your_build_server:your_workspace_root ~/your_workspace_root</code> rồi chạy repomap trên PC. Nút Quét sâu với repo lớn sẽ chậm hơn vì file phải đọc qua mạng.</li>
       </ul>
 
       <h3>Không cần giao diện</h3>
-      <div class="cmd"><pre>python3 repomap.pyz ~/work/ws --json kernel/linux &gt; linux.json</pre></div>
+      <div class="cmd"><pre>python3 repomap.pyz ~/your_workspace_root --json kernel/linux &gt; linux.json</pre></div>
       <p>In ra thông tin nhanh và kết quả quét sâu của một repo dưới dạng JSON, tiện để đưa vào script.</p>
     </div>
   </div>
