@@ -57,6 +57,7 @@ body {
   margin: 0; background: var(--paper); color: var(--ink);
   font: 400 17px/1.6 var(--text); font-feature-settings: "kern", "liga";
 }
+strong { font-weight: 600; }
 a { color: inherit; text-decoration-color: var(--trace); text-underline-offset: 3px; text-decoration-thickness: 1.5px; }
 a:hover { color: var(--trace); }
 :focus-visible { outline: 2px solid var(--net); outline-offset: 2px; }
@@ -154,6 +155,19 @@ pre .c { color: var(--muted); }
 }
 .copy:hover { color: var(--ink); border-color: var(--ink); }
 
+.ways { margin-top: 18px; }
+.ways h3 { margin-top: 18px; }
+.setup { width: 100%; max-width: 460px; height: auto; display: block; margin: 14px 0 6px; }
+.setup .box { fill: var(--sheet); stroke: var(--ink); stroke-width: 1.5; }
+.setup .box.faint { stroke: var(--rule); stroke-dasharray: 4 3; fill: none; }
+.setup .box-t { font: 600 14px var(--display); fill: var(--ink); }
+.setup .pad { fill: var(--sheet); stroke: var(--trace); stroke-width: 2.5; }
+.setup .pad.tool { fill: var(--trace); }
+.setup .pin-t { font: 500 13px var(--display); fill: var(--ink); text-anchor: middle; }
+.setup .wire-t { font: 500 12.5px var(--display); fill: var(--muted); text-anchor: middle; }
+.setup .wire.dash { stroke-dasharray: 6 4; }
+.setup .wire.faint { stroke: var(--rule); }
+.setup .faint-t { fill: var(--muted); }
 .steps { padding-left: 1.3em; }
 .steps li { margin-bottom: 10px; padding-left: 4px; }
 .steps li::marker { font: 700 17px var(--display); color: var(--trace); }
@@ -201,7 +215,8 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 9h5V3h7M8 9v6h7" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="3" cy="9" r="2.5" fill="currentColor"/><circle cx="8" cy="9" r="1.8" fill="currentColor"/></svg>repomap</a>
   <nav aria-label="Mục lục">
     <a href="#tang">Bốn tầng</a>
-    <a href="#chay">Cài và chạy</a>
+    <a href="#chay">Chạy ở đâu</a>
+    <a href="#dong-goi">Đóng gói</a>
     <a href="#cau-hinh">Cấu hình</a>
     <a href="#nhan-dien">Hệ được hỗ trợ</a>
     <button id="theme" type="button">Giao diện tối</button>
@@ -251,36 +266,95 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
 </section>
 
 <section id="chay">
-  <div class="split">
-    <div>
-      <h2>Cài và chạy</h2>
-      <p>Chỉ cần Python 3.8 trở lên. Tool chỉ dùng thư viện chuẩn, nên không phải cài thêm gói nào.</p>
-      <h3>Chạy từ mã nguồn</h3>
-      <div class="cmd"><pre>git clone https://github.com/Tony181-dev/repo_insight.git
-cd repo_insight
-python3 -m repomap ~/work/acme-bsp</pre></div>
-      <p>Trình duyệt tự mở tại <code>http://127.0.0.1:8800</code>. Server chỉ nghe trên máy hiện tại.</p>
+  <div class="prose">
+    <h2>Chạy ở đâu</h2>
+    <p>repomap phải chạy <strong>trên máy đang chứa source code</strong>, tức thư mục bạn đã <code>repo sync</code> về, vì nó đọc trực tiếp manifest, Makefile, file <code>.bb</code>… trên ổ đĩa.</p>
+    <p>Không cài lên board. Board chỉ chạy image đã build xong; trên đó không có source nên tool không có gì để đọc.</p>
+    <p>Tuỳ source nằm ở đâu, chọn một trong hai cách.</p>
+  </div>
 
-      <h3>Một file duy nhất cho máy build</h3>
-      <div class="cmd"><pre>make pyz                      <span class="c"># tạo dist/repomap.pyz</span>
-scp dist/repomap.pyz build01:~/bin/
-ssh build01 '~/bin/repomap.pyz ~/work/acme-bsp'</pre></div>
-      <p>Hoặc <code>make install</code> để có lệnh <code>repomap</code>, <code>make wheel</code> để lấy gói wheel.</p>
+  <div class="split ways">
+    <div>
+      <h3>Cách 1: source nằm trên PC Linux bạn đang ngồi</h3>
+      <svg class="setup" viewBox="0 0 460 150" role="img" aria-label="Một PC chứa cả source, repomap và trình duyệt">
+        <rect class="box" x="10" y="20" width="440" height="110"/>
+        <text class="box-t" x="22" y="40">PC Linux của bạn</text>
+        <path class="wire" d="M87 92H212M230 92H355"/>
+        <circle class="pad" cx="80" cy="92" r="7"/><text class="pin-t" x="80" y="118">source</text>
+        <circle class="pad tool" cx="221" cy="92" r="9"/><text class="pin-t" x="221" y="118">repomap</text>
+        <circle class="pad" cx="362" cy="92" r="7"/><text class="pin-t" x="362" y="118">trình duyệt</text>
+      </svg>
+      <div class="cmd"><pre>python3 -m repomap ~/work/ws</pre></div>
+      <p>Trình duyệt tự mở tại <code>http://127.0.0.1:8800</code>. Không cần ssh.</p>
+      <p class="sub">Lấy tool bằng <code>git clone https://github.com/Tony181-dev/repo_insight.git</code> rồi chạy lệnh trên trong thư mục đó, hoặc dùng file <code>repomap.pyz</code> đã đóng gói như ở cách 2.</p>
     </div>
     <div>
-      <h2 id="xa">Máy build ở xa</h2>
-      <p>Workspace thường nằm trên máy build không có màn hình. repomap chạy ở đó, bạn xem trên máy mình qua một ssh tunnel.</p>
+      <h3 id="xa">Cách 2: source nằm trên máy build ở xa, bạn ssh vào</h3>
+      <svg class="setup" viewBox="0 0 460 150" role="img" aria-label="Trình duyệt trên PC nối qua ssh tunnel tới repomap trên máy build; board chỉ nhận image">
+        <rect class="box" x="10" y="20" width="120" height="110"/>
+        <text class="box-t" x="22" y="40">PC của bạn</text>
+        <circle class="pad" cx="70" cy="92" r="7"/><text class="pin-t" x="70" y="118">trình duyệt</text>
+        <path class="wire dash" d="M77 92H227"/>
+        <text class="wire-t" x="165" y="80">ssh tunnel</text>
+        <rect class="box" x="200" y="20" width="160" height="110"/>
+        <text class="box-t" x="212" y="40">Máy build</text>
+        <circle class="pad tool" cx="236" cy="92" r="9"/><text class="pin-t" x="236" y="118">repomap</text>
+        <path class="wire" d="M245 92H315"/>
+        <circle class="pad" cx="322" cy="92" r="7"/><text class="pin-t" x="322" y="118">source</text>
+        <path class="wire faint" d="M360 75H392"/>
+        <rect class="box faint" x="392" y="52" width="58" height="46"/>
+        <text class="pin-t faint-t" x="421" y="80">board</text>
+        <text class="wire-t faint-t" x="421" y="118">chỉ nhận image</text>
+      </svg>
       <ol class="steps">
-        <li>Trên máy build, chạy <code>repomap ~/work/acme-bsp</code>. Tool không mở trình duyệt khi không có màn hình.</li>
-        <li>Tool in sẵn lệnh tunnel đúng với port đang chạy:
-          <div class="cmd"><pre>tu may khac: ssh -L 8800:127.0.0.1:8800 dev@build01</pre></div></li>
-        <li>Chạy lệnh đó trên máy bạn, giữ cửa sổ mở.</li>
-        <li>Mở <code>http://127.0.0.1:8800</code> trên trình duyệt của bạn.</li>
+        <li>Copy tool lên máy build: <code>scp repomap.pyz build01:~/bin/</code>, hoặc <code>git clone</code> ngay trên máy đó.</li>
+        <li>Trên máy build, chạy <code>python3 ~/bin/repomap.pyz ~/work/ws</code>. Tool in ra một lệnh dạng:
+          <div class="cmd"><pre>ssh -L 8800:127.0.0.1:8800 user@build01</pre></div></li>
+        <li>Trên PC của bạn, chạy lệnh đó rồi giữ cửa sổ terminal mở.</li>
+        <li>Mở trình duyệt trên PC, vào <code>http://127.0.0.1:8800</code>.</li>
       </ol>
+      <p>Tool đọc file ở máy build, còn bạn xem giao diện trên PC qua ssh tunnel. Không phải copy source về PC.</p>
       <p class="sub">Port, user và tên máy trong lệnh tunnel chỉnh được ở file cấu hình. Nếu port 8800 bận, tool tự chuyển sang 8801, 8802… và lệnh in ra theo port mới.</p>
+    </div>
+  </div>
+</section>
+
+<section id="dong-goi">
+  <div class="split">
+    <div>
+      <h2>Đóng gói trên Windows</h2>
+      <p>Bạn đóng gói tool một lần trên PC Windows thành một file <code>repomap.pyz</code> khoảng 35 KB, rồi copy file đó lên máy build. Máy build chỉ cần có python3, không cần git clone, không cần pip, không cần mạng.</p>
+      <ol class="steps">
+        <li>Cài Python 3.8 trở lên trên Windows từ <a href="https://www.python.org/downloads/">python.org</a>. Python này chỉ dùng để đóng gói.</li>
+        <li>Lấy mã nguồn: <code>git clone https://github.com/Tony181-dev/repo_insight.git</code>, hoặc tải file zip từ GitHub rồi giải nén.</li>
+        <li>Bấm đúp <code>build.bat</code>, hoặc chạy trong cmd:
+          <div class="cmd"><pre>build.bat           <span class="c">rem chạy unit test rồi đóng gói</span>
+build.bat notest    <span class="c">rem bỏ qua unit test</span></pre></div>
+          Kết quả là file <code>dist\repomap.pyz</code>.</li>
+        <li>Copy lên máy build. Windows 10 trở lên có sẵn lệnh <code>scp</code>; dùng WinSCP cũng được.
+          <div class="cmd"><pre>scp dist\repomap.pyz user@build01:~/bin/</pre></div></li>
+        <li>Trên máy build, chạy như cách 2 ở trên:
+          <div class="cmd"><pre>python3 ~/bin/repomap.pyz ~/work/ws</pre></div></li>
+      </ol>
+      <p class="sub">File copy từ Windows sang sẽ không có quyền thực thi, nên chạy qua <code>python3 repomap.pyz</code>. Muốn gõ thẳng <code>./repomap.pyz</code> thì chạy <code>chmod +x</code> một lần.</p>
+    </div>
+    <div>
+      <h3>Đóng gói trên Linux</h3>
+      <div class="cmd"><pre>make pyz                     <span class="c"># chạy test rồi đóng gói</span>
+python3 tools/build_pyz.py   <span class="c"># không cần make</span></pre></div>
+      <p>Cả hai đều tạo <code>dist/repomap.pyz</code> giống hệt bản của <code>build.bat</code>, vì cùng dùng script <code>tools/build_pyz.py</code>.</p>
+
+      <h3 id="python-cu">Máy build không có Python 3.8</h3>
+      <p>Kiểm tra trước bằng <code>python3 --version</code>. Máy build Yocto hay Android thường đã có sẵn python3. Nếu thiếu hoặc quá cũ, các cách dưới đều không cần quyền root:</p>
+      <ul class="limits">
+        <li><strong>Android:</strong> sau <code>repo sync</code> thường có Python dựng sẵn trong <code>prebuilts/</code>. Tìm bằng <code>find prebuilts -path '*linux-x86*' -name 'python3*' -type f</code>, rồi chạy file <code>.pyz</code> bằng Python đó.</li>
+        <li><strong>Yocto:</strong> chạy <code>poky/scripts/install-buildtools</code> để tải bộ buildtools có python3 mới, sau đó <code>source</code> file môi trường mà nó in ra.</li>
+        <li><strong>Python riêng trong thư mục home:</strong> giải nén một bản Python dựng sẵn cho Linux (dự án python-build-standalone, hoặc Miniforge) vào <code>~/opt/python</code>, rồi chạy <code>~/opt/python/bin/python3 repomap.pyz ~/work/ws</code>.</li>
+        <li><strong>Chạy trên PC thay vì máy build:</strong> gắn source về PC bằng <code>sshfs build01:/home/you/work/ws ~/ws</code> rồi chạy repomap trên PC. Nút Quét sâu với repo lớn sẽ chậm hơn vì file phải đọc qua mạng.</li>
+      </ul>
 
       <h3>Không cần giao diện</h3>
-      <div class="cmd"><pre>repomap ~/work/acme-bsp --json kernel/linux &gt; linux.json</pre></div>
+      <div class="cmd"><pre>python3 repomap.pyz ~/work/ws --json kernel/linux &gt; linux.json</pre></div>
       <p>In ra thông tin nhanh và kết quả quét sâu của một repo dưới dạng JSON, tiện để đưa vào script.</p>
     </div>
   </div>

@@ -83,7 +83,11 @@ parser vào `parsers.parse_file`, màu vào `web/js/util.js` (`KIND_COLOR`).
 ## Đóng gói
 
 ```sh
+build.bat     # Windows: chạy test rồi tạo dist\repomap.pyz (build.bat notest để bỏ test)
+make pyz      # Linux: cũng tạo dist/repomap.pyz (cùng dùng tools/build_pyz.py)
 make test     # unit test
-make pyz      # dist/repomap.pyz - 1 file, copy sang máy Linux nào có python3 là chạy
-make wheel    # dist/repomap-*.whl - pip install được, có lệnh `repomap`
+make wheel    # dist/repomap-*.whl - pip install được, có lệnh `repomap` (cần tải setuptools từ PyPI)
 ```
+
+`repomap.pyz` là 1 file duy nhất: copy sang máy build Linux có python3 rồi chạy
+`python3 repomap.pyz ~/work/ws`, không cần pip, không cần mạng.
