@@ -29,8 +29,8 @@ if errorlevel 1 (
 
 echo.
 echo Buoc tiep theo, copy sang may build va chay:
-echo   scp dist\repomap.pyz user@build01:~/bin/
-echo   ssh user@build01 "python3 ~/bin/repomap.pyz ~/work/ws"
+echo   scp dist\repomap.pyz user@your_build_server:~/bin/
+echo   ssh user@your_build_server "python3 ~/bin/repomap.pyz ~/work/ws"
 
 :end
 echo.

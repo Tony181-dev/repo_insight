@@ -307,9 +307,9 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
         <text class="wire-t faint-t" x="421" y="118">chỉ nhận image</text>
       </svg>
       <ol class="steps">
-        <li>Copy tool lên máy build: <code>scp repomap.pyz build01:~/bin/</code>, hoặc <code>git clone</code> ngay trên máy đó.</li>
+        <li>Copy tool lên máy build: <code>scp repomap.pyz your_build_server:~/bin/</code>, hoặc <code>git clone</code> ngay trên máy đó.</li>
         <li>Trên máy build, chạy <code>python3 ~/bin/repomap.pyz ~/work/ws</code>. Tool in ra một lệnh dạng:
-          <div class="cmd"><pre>ssh -L 8800:127.0.0.1:8800 user@build01</pre></div></li>
+          <div class="cmd"><pre>ssh -L 8800:127.0.0.1:8800 user@your_build_server</pre></div></li>
         <li>Trên PC của bạn, chạy lệnh đó rồi giữ cửa sổ terminal mở.</li>
         <li>Mở trình duyệt trên PC, vào <code>http://127.0.0.1:8800</code>.</li>
       </ol>
@@ -332,7 +332,7 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
 build.bat notest    <span class="c">rem bỏ qua unit test</span></pre></div>
           Kết quả là file <code>dist\repomap.pyz</code>. Cửa sổ dừng lại ở cuối để bạn đọc kết quả, kể cả khi có lỗi; bấm phím bất kỳ để đóng.</li>
         <li>Copy lên máy build. Windows 10 trở lên có sẵn lệnh <code>scp</code>; dùng WinSCP cũng được.
-          <div class="cmd"><pre>scp dist\repomap.pyz user@build01:~/bin/</pre></div></li>
+          <div class="cmd"><pre>scp dist\repomap.pyz user@your_build_server:~/bin/</pre></div></li>
         <li>Trên máy build, chạy như cách 2 ở trên:
           <div class="cmd"><pre>python3 ~/bin/repomap.pyz ~/work/ws</pre></div></li>
       </ol>
@@ -350,7 +350,7 @@ python3 tools/build_pyz.py   <span class="c"># không cần make</span></pre></d
         <li><strong>Android:</strong> sau <code>repo sync</code> thường có Python dựng sẵn trong <code>prebuilts/</code>. Tìm bằng <code>find prebuilts -path '*linux-x86*' -name 'python3*' -type f</code>, rồi chạy file <code>.pyz</code> bằng Python đó.</li>
         <li><strong>Yocto:</strong> chạy <code>poky/scripts/install-buildtools</code> để tải bộ buildtools có python3 mới, sau đó <code>source</code> file môi trường mà nó in ra.</li>
         <li><strong>Python riêng trong thư mục home:</strong> giải nén một bản Python dựng sẵn cho Linux (dự án python-build-standalone, hoặc Miniforge) vào <code>~/opt/python</code>, rồi chạy <code>~/opt/python/bin/python3 repomap.pyz ~/work/ws</code>.</li>
-        <li><strong>Chạy trên PC thay vì máy build:</strong> gắn source về PC bằng <code>sshfs build01:/home/you/work/ws ~/ws</code> rồi chạy repomap trên PC. Nút Quét sâu với repo lớn sẽ chậm hơn vì file phải đọc qua mạng.</li>
+        <li><strong>Chạy trên PC thay vì máy build:</strong> gắn source về PC bằng <code>sshfs your_build_server:/home/you/work/ws ~/ws</code> rồi chạy repomap trên PC. Nút Quét sâu với repo lớn sẽ chậm hơn vì file phải đọc qua mạng.</li>
       </ul>
 
       <h3>Không cần giao diện</h3>
@@ -379,7 +379,7 @@ open_browser = auto  <span class="c"># auto, yes hoặc no</span>
 [ssh]                <span class="c"># dùng để in lệnh tunnel</span>
 local_port =         <span class="c"># trống: giống port server</span>
 user = dev
-host = build01
+host = your_build_server
 
 [scan]
 workers = 0          <span class="c"># 0: tự chọn theo số CPU</span></pre></div>

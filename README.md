@@ -20,7 +20,7 @@ repomap /path/to/workspace --json vendor/foo     # in JSON insight + quét sâu 
 ```
 
 Máy build ở xa: chạy `repomap /ws` trên máy đó, tool in sẵn lệnh tunnel đúng port, ví dụ
-`ssh -L 8800:127.0.0.1:8800 user@build01`; chạy lệnh đó trên máy bạn rồi mở http://127.0.0.1:8800.
+`ssh -L 8800:127.0.0.1:8800 user@your_build_server`; chạy lệnh đó trên máy bạn rồi mở http://127.0.0.1:8800.
 
 ## Cấu hình
 
