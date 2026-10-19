@@ -27,7 +27,7 @@ def version():
 
 
 def run_tests():
-    print('chay unit test...')
+    print('chay unit test...', flush=True)
     r = subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s', 'tests'], cwd=ROOT)
     if r.returncode:
         sys.exit('unit test loi, khong dong goi')
