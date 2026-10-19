@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>repomap: bản đồ workspace repo sync</title>
+<meta name="description" content="repomap vẽ cây repo từ manifest và chỉ đọc sâu vào chỗ bạn bấm. Dành cho workspace Yocto, Android, QNX, Linux.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;1,400&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #e9ede6;
+  --sheet: #f4f6f1;
+  --ink: #1c2621;
+  --muted: #59665e;
+  --rule: #b9c3bb;
+  --grid: #d7ddd4;
+  --grid-major: #c6cec4;
+  --trace: #2e7a4c;
+  --net: #b42318;
+  --k-yocto: #b06a00;
+  --k-kernel: #b4231b;
+  --k-android: #1d7a3e;
+  --k-qnx: #1f4fc4;
+  --k-cmake: #0f6f68;
+  --k-dir: #6c776f;
+  --k-cat: #7a3fb0;
+  --k-file: #3b4a42;
+  --code-bg: #f8faf6;
+  --hl: #f3e3b3;
+  --display: "Barlow Semi Condensed", "Arial Narrow", sans-serif;
+  --text: "Barlow", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #161d19; --sheet: #1d2621; --ink: #dce4dd; --muted: #95a39a; --rule: #34423a;
+    --grid: #1f2923; --grid-major: #28342d; --trace: #6cc08f; --net: #ff7a6b;
+    --k-yocto: #f0a83a; --k-kernel: #ff7b72; --k-android: #5fd38a; --k-qnx: #7aa7ff; --k-cmake: #3fc7b9;
+    --k-dir: #8e9a92; --k-cat: #c79cff; --k-file: #b8c4bc; --code-bg: #121815; --hl: #4a3d12;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #161d19; --sheet: #1d2621; --ink: #dce4dd; --muted: #95a39a; --rule: #34423a;
+  --grid: #1f2923; --grid-major: #28342d; --trace: #6cc08f; --net: #ff7a6b;
+  --k-yocto: #f0a83a; --k-kernel: #ff7b72; --k-android: #5fd38a; --k-qnx: #7aa7ff; --k-cmake: #3fc7b9;
+  --k-dir: #8e9a92; --k-cat: #c79cff; --k-file: #b8c4bc; --code-bg: #121815; --hl: #4a3d12;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--paper); color: var(--ink);
+  font: 400 17px/1.6 var(--text); font-feature-settings: "kern", "liga";
+}
+a { color: inherit; text-decoration-color: var(--trace); text-underline-offset: 3px; text-decoration-thickness: 1.5px; }
+a:hover { color: var(--trace); }
+:focus-visible { outline: 2px solid var(--net); outline-offset: 2px; }
+code, pre, kbd { font-family: var(--mono); font-size: .86em; }
+p code, li code, td code { background: var(--sheet); padding: .05em .3em; border-radius: 3px; overflow-wrap: anywhere; }
+kbd { border: 1px solid var(--rule); border-bottom-width: 2px; border-radius: 4px; padding: 0 .35em; background: var(--sheet); }
+
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+.prose { max-width: 68ch; }
+
+/* ---------- top ---------- */
+.top { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 22px 0 0; }
+.mark { font: 700 21px/1 var(--display); letter-spacing: .01em; text-decoration: none; }
+.mark svg { vertical-align: -3px; margin-right: 6px; }
+.top nav { display: flex; gap: 20px; font-size: 15px; }
+.top nav a { text-decoration: none; color: var(--muted); }
+.top nav a:hover { color: var(--ink); }
+#theme { font: inherit; font-size: 15px; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 0; }
+#theme:hover { color: var(--ink); }
+
+/* ---------- hero ---------- */
+.hero h1 {
+  font: 700 clamp(40px, 6.4vw, 72px)/1 var(--display);
+  letter-spacing: -.012em; margin: 64px 0 20px; max-width: 15ch;
+}
+.lede { font-size: 21px; line-height: 1.5; color: var(--muted); max-width: 54ch; margin: 0 0 36px; }
+.lede strong { color: var(--ink); font-weight: 500; }
+
+.drawing { position: relative; border: 1.5px solid var(--ink); background: var(--sheet); }
+.drawing::before {                       /* le trong cua ban ve */
+  content: ""; position: absolute; inset: 7px; border: 1px solid var(--rule); pointer-events: none;
+}
+.canvas { overflow-x: auto; overflow-y: hidden; padding: 18px 18px 0; min-height: 430px; }
+#schematic { display: block; }
+#schematic .grid-minor { stroke: var(--grid); }
+#schematic .grid-major { stroke: var(--grid-major); }
+.wire { fill: none; stroke: var(--trace); stroke-width: 1.6; }
+.junction { fill: var(--trace); }
+.pin text { font: 500 14px var(--display); fill: var(--ink); paint-order: stroke; stroke: var(--sheet); stroke-width: 4px; stroke-linejoin: round; }
+.pin .count { fill: var(--muted); }
+.pin { cursor: pointer; }
+.pin:focus { outline: none; }
+.pin:focus-visible .ring, .pin.sel .ring { opacity: 1; }
+.pin .ring { fill: none; stroke: var(--net); stroke-width: 2; opacity: 0; }
+.pin.hint .ring { opacity: 1; stroke-dasharray: 3 3; }
+.pin.sel text { font-weight: 700; }
+.pin.t-action text { fill: var(--net); font-weight: 600; }
+.pin:hover text { fill: var(--trace); }
+
+.caption {
+  display: grid; grid-template-columns: 1fr 340px; border-top: 1.5px solid var(--ink); margin: 0 7px 7px;
+}
+.say { padding: 14px 18px; font-size: 16px; line-height: 1.5; min-height: 88px; }
+.say b { font: 600 17px var(--display); }
+.titleblock { border-left: 1.5px solid var(--ink); display: grid; grid-template-columns: 1fr 1fr; font-size: 13.5px; }
+.titleblock div { padding: 6px 10px; border-bottom: 1px solid var(--rule); }
+.titleblock div:nth-child(odd):not(.full) { border-right: 1px solid var(--rule); }
+.titleblock .full { grid-column: 1 / -1; }
+.titleblock .name { font: 700 26px/1.05 var(--display); padding-top: 10px; }
+.titleblock .name small { display: block; font: 500 14px var(--display); color: var(--muted); margin-top: 2px; }
+.titleblock span { display: block; font-size: 12px; color: var(--muted); line-height: 1.3; }
+.titleblock .last { border-bottom: 0; }
+#layer-now { font: 700 20px/1.1 var(--display); color: var(--net); }
+.drawing-note { font-size: 14px; color: var(--muted); margin: 10px 0 0; }
+
+/* ---------- sections ---------- */
+section { padding: 88px 0 0; }
+h2 { font: 600 38px/1.08 var(--display); letter-spacing: -.005em; margin: 0 0 18px; }
+h3 { font: 600 22px/1.2 var(--display); margin: 34px 0 8px; }
+p { margin: 0 0 14px; }
+.sub { color: var(--muted); }
+
+.layers { list-style: none; padding: 0; margin: 30px 0 0; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1.5px solid var(--ink); }
+.layers li { padding: 16px 20px 6px 0; }
+.layers li + li { padding-left: 20px; border-left: 1px solid var(--rule); }
+.layers .n { font: 700 54px/1 var(--display); color: var(--trace); display: block; }
+.layers h3 { margin: 6px 0 6px; }
+.layers p { font-size: 15.5px; line-height: 1.5; }
+.layers .when { font: 500 15px var(--display); color: var(--muted); }
+
+figure { margin: 34px 0 0; }
+figure img { width: 100%; height: auto; display: block; border: 1.5px solid var(--ink); }
+figcaption { font-size: 14px; color: var(--muted); margin-top: 8px; max-width: 70ch; }
+
+.cmd { position: relative; margin: 12px 0 18px; }
+pre {
+  margin: 0; padding: 14px 16px; background: var(--code-bg); border: 1px solid var(--rule); border-left: 3px solid var(--trace);
+  overflow-x: auto; line-height: 1.55; font-size: 14.5px;
+}
+pre .c { color: var(--muted); }
+.cmd { margin-top: 22px; }
+.copy {
+  position: absolute; top: -12px; right: 10px; font: 500 13px var(--display); color: var(--muted);
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: 4px; padding: 2px 9px; cursor: pointer;
+}
+.copy:hover { color: var(--ink); border-color: var(--ink); }
+
+.steps { padding-left: 1.3em; }
+.steps li { margin-bottom: 10px; padding-left: 4px; }
+.steps li::marker { font: 700 17px var(--display); color: var(--trace); }
+
+.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: start; }
+
+table { width: 100%; border-collapse: collapse; font-size: 15.5px; line-height: 1.5; margin-top: 18px; }
+th { font: 600 16px var(--display); text-align: left; padding: 8px 14px 8px 0; border-bottom: 1.5px solid var(--ink); vertical-align: bottom; }
+td { padding: 11px 14px 11px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+td:first-child { font: 600 17px/1.3 var(--display); white-space: nowrap; }
+.sw { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 8px; vertical-align: 0; }
+.tbl { overflow-x: auto; }
+.tbl table:not(.keys) { min-width: 760px; }
+.keys td:first-child { font: 400 15px var(--text); white-space: normal; width: 34%; }
+
+.limits li { margin-bottom: 8px; }
+
+footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 40px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 15px; color: var(--muted); }
+
+@media (max-width: 860px) {
+  .caption { grid-template-columns: 1fr; }
+  .titleblock { border-left: 0; border-top: 1.5px solid var(--ink); }
+  .layers { grid-template-columns: 1fr 1fr; }
+  .layers li:nth-child(3) { border-left: 0; padding-left: 0; }
+  .split { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .split > * + * { margin-top: 56px; }
+}
+@media (max-width: 560px) {
+  .wrap { padding: 0 16px; }
+  .top nav a:not(:last-child) { display: none; }
+  .layers { grid-template-columns: 1fr; }
+  .layers li + li { border-left: 0; padding-left: 0; border-top: 1px solid var(--rule); }
+  .lede { font-size: 19px; }
+  h2 { font-size: 32px; }
+  .canvas { min-height: 360px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <a class="mark" href="#">
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M3 9h5V3h7M8 9v6h7" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="3" cy="9" r="2.5" fill="currentColor"/><circle cx="8" cy="9" r="1.8" fill="currentColor"/></svg>repomap</a>
+  <nav aria-label="Mục lục">
+    <a href="#tang">Bốn tầng</a>
+    <a href="#chay">Cài và chạy</a>
+    <a href="#cau-hinh">Cấu hình</a>
+    <a href="#nhan-dien">Hệ được hỗ trợ</a>
+    <button id="theme" type="button">Giao diện tối</button>
+  </nav>
+</header>
+
+<main>
+<section class="hero" style="padding-top:0">
+  <h1>Đọc workspace repo sync như đọc một bản vẽ</h1>
+  <p class="lede">repomap vẽ cây repo từ manifest, rồi <strong>chỉ đọc sâu vào chỗ bạn bấm</strong>: một repo, một nhóm file build, một file và những file nó kéo theo. Chạy ngay trên máy build vừa <code>repo sync</code>, không cần build, không cần mạng.</p>
+
+  <figure class="drawing" style="margin:0" aria-label="Bản vẽ minh hoạ, bấm vào các node để thử">
+    <div class="canvas"><svg id="schematic" role="tree" aria-label="Cây repo minh hoạ"></svg></div>
+    <div class="caption">
+      <div class="say" id="say" aria-live="polite"></div>
+      <div class="titleblock">
+        <div class="full name">repomap<small>Bản đồ workspace repo sync</small></div>
+        <div><span>Phiên bản</span>1.0.0</div>
+        <div><span>Cần</span>Python 3.8+</div>
+        <div class="full"><span>Hệ nhận diện</span>Yocto, Android, QNX, Linux</div>
+        <div class="full last"><span>Tầng đang xem</span><b id="layer-now">0 cây repo</b></div>
+      </div>
+    </div>
+  </figure>
+  <p class="drawing-note">Bản vẽ trên là bản thu nhỏ của giao diện thật, dùng một workspace mẫu. Bấm vào các node có viền đỏ đứt nét để đi qua từng tầng.</p>
+</section>
+
+<section id="tang">
+  <div class="prose">
+    <h2>Bốn tầng, chỉ nạp khi bạn cần</h2>
+    <p>Một workspace Android hay Yocto có thể có vài nghìn repo. Quét hết mọi thứ lúc mở thì chậm và phần lớn thông tin bạn không dùng tới. repomap tách việc đọc thành bốn tầng; tầng sau chỉ chạy khi bạn bấm vào đúng chỗ đó, và kết quả được giữ lại cho lần bấm sau.</p>
+  </div>
+  <ol class="layers">
+    <li><span class="n">0</span><span class="when">Khi mở</span><h3>Cây repo</h3>
+      <p>Đọc <code>.repo/manifest.xml</code> cùng các file include, <code>local_manifests</code>, remove/extend-project. Mỗi repo được tô màu theo loại, nhận ra bằng vài file đánh dấu ở thư mục gốc.</p></li>
+    <li><span class="n">1</span><span class="when">Bấm một repo</span><h3>Thông tin nhanh</h3>
+      <p>Commit đang checkout, số file đang sửa, thông tin chính theo loại repo: layer Yocto, BoardConfig, phiên bản kernel, variant QNX. Kèm danh sách file chính.</p></li>
+    <li><span class="n">2</span><span class="when">Bấm Quét sâu</span><h3>Toàn bộ file build</h3>
+      <p>Liệt kê mọi file bằng <code>git ls-files</code> và gom nhóm: recipe, bbappend, machine, Android module, defconfig, device tree, buildfile QNX, CMake, Makefile…</p></li>
+    <li><span class="n">3</span><span class="when">Bấm một file</span><h3>File và tham chiếu</h3>
+      <p>Biến, module, nội dung, và các file được kéo theo đã tìm ra đường dẫn thật. Bấm tiếp để đi sang file đó, kể cả khi nó nằm ở repo khác.</p></li>
+  </ol>
+  <figure>
+    <img src="app.png" width="1440" height="860" alt="Giao diện repomap: cây repo bên trái đã mở tới busybox_1.36.bb, panel bên phải hiện tham chiếu require, inherit, appended-by và nội dung file.">
+    <figcaption>Giao diện thật: từ layer meta-acme đi xuống bbappend, sang recipe gốc trong poky, rồi tới file <code>.inc</code> và class nó kéo theo. Panel bên phải là chi tiết của node đang chọn.</figcaption>
+  </figure>
+</section>
+
+<section id="chay">
+  <div class="split">
+    <div>
+      <h2>Cài và chạy</h2>
+      <p>Chỉ cần Python 3.8 trở lên. Tool chỉ dùng thư viện chuẩn, nên không phải cài thêm gói nào.</p>
+      <h3>Chạy từ mã nguồn</h3>
+      <div class="cmd"><pre>git clone https://github.com/Tony181-dev/repo_insight.git
+cd repo_insight
+python3 -m repomap ~/work/acme-bsp</pre></div>
+      <p>Trình duyệt tự mở tại <code>http://127.0.0.1:8800</code>. Server chỉ nghe trên máy hiện tại.</p>
+
+      <h3>Một file duy nhất cho máy build</h3>
+      <div class="cmd"><pre>make pyz                      <span class="c"># tạo dist/repomap.pyz</span>
+scp dist/repomap.pyz build01:~/bin/
+ssh build01 '~/bin/repomap.pyz ~/work/acme-bsp'</pre></div>
+      <p>Hoặc <code>make install</code> để có lệnh <code>repomap</code>, <code>make wheel</code> để lấy gói wheel.</p>
+    </div>
+    <div>
+      <h2 id="xa">Máy build ở xa</h2>
+      <p>Workspace thường nằm trên máy build không có màn hình. repomap chạy ở đó, bạn xem trên máy mình qua một ssh tunnel.</p>
+      <ol class="steps">
+        <li>Trên máy build, chạy <code>repomap ~/work/acme-bsp</code>. Tool không mở trình duyệt khi không có màn hình.</li>
+        <li>Tool in sẵn lệnh tunnel đúng với port đang chạy:
+          <div class="cmd"><pre>tu may khac: ssh -L 8800:127.0.0.1:8800 dev@build01</pre></div></li>
+        <li>Chạy lệnh đó trên máy bạn, giữ cửa sổ mở.</li>
+        <li>Mở <code>http://127.0.0.1:8800</code> trên trình duyệt của bạn.</li>
+      </ol>
+      <p class="sub">Port, user và tên máy trong lệnh tunnel chỉnh được ở file cấu hình. Nếu port 8800 bận, tool tự chuyển sang 8801, 8802… và lệnh in ra theo port mới.</p>
+
+      <h3>Không cần giao diện</h3>
+      <div class="cmd"><pre>repomap ~/work/acme-bsp --json kernel/linux &gt; linux.json</pre></div>
+      <p>In ra thông tin nhanh và kết quả quét sâu của một repo dưới dạng JSON, tiện để đưa vào script.</p>
+    </div>
+  </div>
+</section>
+
+<section id="cau-hinh">
+  <div class="split">
+    <div class="prose">
+      <h2>Cấu hình</h2>
+      <p>Tạo file mẫu có sẵn chú thích, rồi sửa những dòng cần thiết:</p>
+      <div class="cmd"><pre>repomap --init-config</pre></div>
+      <p>File được ghi vào <code>~/.config/repomap/config.ini</code>. Muốn để cấu hình riêng cho một thư mục, đặt file tên <code>repomap.ini</code> ở đó, hoặc chỉ định bằng <code>--config</code>.</p>
+      <p>Tham số dòng lệnh luôn thắng file cấu hình: <code>--port</code>, <code>--host</code>, <code>--no-browser</code>, <code>--workers</code>.</p>
+      <p class="sub">Thứ tự tìm file: <code>--config</code>, biến <code>$REPOMAP_CONFIG</code>, <code>./repomap.ini</code>, rồi <code>~/.config/repomap/config.ini</code>.</p>
+    </div>
+    <div class="cmd"><pre>[server]
+host = 127.0.0.1     <span class="c"># 0.0.0.0 mở cho cả mạng, không có mật khẩu</span>
+port = 8800
+port_tries = 20
+open_browser = auto  <span class="c"># auto, yes hoặc no</span>
+
+[ssh]                <span class="c"># dùng để in lệnh tunnel</span>
+local_port =         <span class="c"># trống: giống port server</span>
+user = dev
+host = build01
+
+[scan]
+workers = 0          <span class="c"># 0: tự chọn theo số CPU</span></pre></div>
+  </div>
+</section>
+
+<section id="nhan-dien">
+  <div class="prose">
+    <h2>Hệ được hỗ trợ</h2>
+    <p>Mọi thứ là phân tích tĩnh trên file nguồn, nên dùng được ngay sau <code>repo sync</code>. Bảng dưới là những gì repomap nhận ra và đọc được ở từng tầng.</p>
+  </div>
+  <div class="tbl"><table>
+    <thead><tr><th>Hệ</th><th>Nhận ra nhờ</th><th>Tầng 1 cho biết</th><th>Tầng 3 nối được</th></tr></thead>
+    <tbody>
+      <tr><td><span class="sw" style="background:var(--k-yocto)"></span>Yocto, BitBake</td>
+        <td><code>conf/layer.conf</code>, <code>meta-*/conf/layer.conf</code>, <code>bitbake/bin/bitbake</code></td>
+        <td>Collection, priority, LAYERDEPENDS, LAYERSERIES_COMPAT, machine, distro, các thư mục <code>recipes-*</code>, phiên bản BitBake</td>
+        <td><code>require</code>, <code>include</code>, <code>inherit</code> sang class ở mọi layer; recipe với các bbappend của nó; <code>SRC_URI</code> sang repo trong manifest</td></tr>
+      <tr><td><span class="sw" style="background:var(--k-android)"></span>Android</td>
+        <td><code>AndroidProducts.mk</code>, <code>BoardConfig*.mk</code>, <code>Android.bp</code>, <code>Android.mk</code></td>
+        <td>PRODUCT_MAKEFILES, COMMON_LUNCH_CHOICES, TARGET_ARCH, TARGET_CPU_VARIANT, TARGET_BOARD_PLATFORM, module ở gốc repo</td>
+        <td><code>inherit-product</code> sang file .mk ở repo khác; module trong Android.bp và Android.mk kèm thư viện phụ thuộc</td></tr>
+      <tr><td><span class="sw" style="background:var(--k-qnx)"></span>QNX</td>
+        <td>Thư mục <code>nto/</code>, file <code>.use</code>, Makefile gọi <code>recurse.mk</code> hay <code>qtargets.mk</code>, buildfile có <code>[virtual=]</code></td>
+        <td>NAME, INSTALLDIR, LIBS, EXTRA_INCVPATH, các variant như <code>nto/aarch64/so.le</code>, thuộc tính image</td>
+        <td><code>include</code> từ Makefile của variant về <code>common.mk</code></td></tr>
+      <tr><td><span class="sw" style="background:var(--k-kernel)"></span>Linux, U-Boot</td>
+        <td><code>Kconfig</code> cùng <code>arch/</code>, <code>kernel/</code>, <code>mm/</code> (U-Boot: <code>board/</code>, <code>cmd/</code>)</td>
+        <td>Phiên bản từ Makefile, danh sách arch và số defconfig của từng arch</td>
+        <td><code>#include</code> trong device tree, <code>source</code> trong Kconfig</td></tr>
+      <tr><td><span class="sw" style="background:var(--k-cmake)"></span>Các hệ khác</td>
+        <td>CMake, Meson, Make, Autotools, Bazel, Cargo, Go, Gradle, Node, Python</td>
+        <td>Tên project và target CMake, các biến chính trong Makefile</td>
+        <td><code>add_subdirectory</code>, <code>include()</code> của CMake, <code>subdir()</code> của Meson, <code>include</code> của Make</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="thao-tac">
+  <div class="split">
+    <div>
+      <h2>Thao tác trong giao diện</h2>
+      <div class="tbl"><table class="keys">
+        <tbody>
+          <tr><td>Bấm một node</td><td>Chọn node, mở nhánh và nạp tầng tiếp theo nếu chưa có. Panel bên phải hiện chi tiết.</td></tr>
+          <tr><td>Bấm lại node đang chọn</td><td>Thu nhánh đó lại.</td></tr>
+          <tr><td>Kéo, cuộn chuột</td><td>Di chuyển và phóng to bản vẽ.</td></tr>
+          <tr><td><kbd>/</kbd></td><td>Tìm repo theo đường dẫn hoặc tên. Gõ <code>kind:qnx</code> để lọc theo loại; bấm vào chú thích màu ở góc dưới cũng ra kết quả tương tự.</td></tr>
+          <tr><td>Nút Quét sâu</td><td>Trong panel của repo. Bấm lần nữa để quét lại sau khi bạn đổi file.</td></tr>
+          <tr><td>Số dòng trong panel</td><td>Nhảy tới dòng đó trong phần nội dung file.</td></tr>
+          <tr><td>Vừa khung, Mở thêm 1 tầng, Thu gọn</td><td>Căn bản vẽ vừa màn hình, mở rộng mọi thư mục đang thấy thêm một cấp, hoặc đóng hết về gốc.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="prose">
+      <h2>Giới hạn cần biết</h2>
+      <ul class="limits">
+        <li>repomap không chạy bitbake, make hay soong. Biến chỉ được thay ở các dạng đơn giản như <code>$(LOCAL_PATH)</code>, <code>${THISDIR}</code>, <code>${PN}</code>; tham chiếu còn biến khác sẽ hiện nhưng không bấm sang được.</li>
+        <li>Override của BitBake và biểu thức <code>${@...}</code> không được tính.</li>
+        <li>Thư viện phụ thuộc của Android module chỉ hiện tên, chưa nối sang repo định nghĩa module đó.</li>
+        <li>Mỗi nhóm file gửi tối đa 600 mục về giao diện; nội dung file hiện 4000 dòng đầu.</li>
+        <li>Workspace không có manifest vẫn dùng được: tool tìm các thư mục <code>.git</code> sâu tối đa 6 cấp.</li>
+      </ul>
+      <h3>Thêm một hệ build</h3>
+      <p>Nhóm file nằm trong <code>repomap/rules.py</code>, file đánh dấu trong <code>repomap/classify.py</code>, parser trong <code>repomap/parsers.py</code>. Thêm màu cho loại mới ở <code>repomap/web/js/util.js</code>. Chạy <code>make test</code> để kiểm tra.</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <span>repomap 1.0.0</span>
+  <a href="https://github.com/Tony181-dev/repo_insight">Mã nguồn trên GitHub</a>
+</footer>
+</div>
+
+<script>
+(() => {
+  /* ---------- giao dien sang / toi ---------- */
+  const root = document.documentElement, themeBtn = document.getElementById('theme');
+  const isDark = () => root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  try { const t = localStorage.getItem('repomap-docs-theme'); if (t) root.dataset.theme = t; } catch (e) {}
+  const syncBtn = () => { themeBtn.textContent = isDark() ? 'Giao diện sáng' : 'Giao diện tối'; };
+  themeBtn.addEventListener('click', () => {
+    root.dataset.theme = isDark() ? 'light' : 'dark';
+    try { localStorage.setItem('repomap-docs-theme', root.dataset.theme); } catch (e) {}
+    syncBtn();
+  });
+  syncBtn();
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', syncBtn);
+
+  /* ---------- nut copy cho khoi lenh ---------- */
+  document.querySelectorAll('.cmd').forEach(box => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'copy'; b.textContent = 'Copy';
+    b.addEventListener('click', () => {
+      const text = [...box.querySelector('pre').childNodes].filter(n => !(n.classList && n.classList.contains('c')))
+        .map(n => n.textContent).join('').replace(/[ \t]+$/gm, '');
+      navigator.clipboard?.writeText(text).then(() => { b.textContent = 'Đã copy'; setTimeout(() => (b.textContent = 'Copy'), 1400); });
+    });
+    box.appendChild(b);
+  });
+
+  /* ---------- ban ve minh hoa ---------- */
+  const N = (label, type, kind, opts = {}) => Object.assign({ label, type, kind, kids: [], open: false }, opts);
+  const file = (label, opts) => N(label, 'file', 'file', opts);
+  const cat = (label, n, kids, opts) => N(label, 'cat', 'cat', Object.assign({ count: n, kids }, opts));
+
+  // meta-acme: tang 1 -> nut quet sau -> tang 2 -> file -> tham chieu
+  const recipe = file('appends poky:busybox_1.36.bb', {
+    layer: 3, hint: true,
+    say: '<b>Tầng 3, sang repo khác.</b> bbappend này nối về recipe gốc trong poky. Recipe đó lại kéo theo file .inc và class cmake; repomap tìm chúng trên mọi layer của workspace.',
+    kids: [file('require busybox.inc'), file('inherit classes-recipe/cmake.bbclass'), file('appended-by meta-acme:busybox_%.bbappend')],
+  });
+  const bbappend = file('busybox_%.bbappend', {
+    layer: 3, hint: true,
+    say: '<b>Tầng 3: một file.</b> Panel hiện biến, nội dung và các tham chiếu. Ở đây <code>%</code> khớp mọi phiên bản busybox, nên repomap tìm ra recipe nó sửa đổi. Bấm tiếp node con.',
+    kids: [recipe],
+  });
+  const acmeDeep = [cat('Yocto machine', 1, [file('acme-board')]), cat('Recipe .bb', 1, [file('foo · 1.0')]),
+    cat('.bbappend', 1, [bbappend], { hint: true, layer: 2, say: '<b>Tầng 2.</b> Mỗi nhóm mở ra danh sách file. Bấm vào file bbappend.' })];
+  const acmeScan = N('Quét sâu', 'action', 'net', {
+    hint: true, layer: 2,
+    say: '<b>Tầng 2: quét sâu.</b> repomap liệt kê mọi file của repo bằng git ls-files rồi gom nhóm. Mở nhóm .bbappend.',
+    expand: n => n.parent.kids.splice(n.parent.kids.indexOf(n), 1, ...acmeDeep.map(c => link(c, n.parent))),
+  });
+  const metaAcme = N('meta-acme', 'repo', 'yocto', {
+    hint: true, layer: 1,
+    say: '<b>Tầng 1: thông tin nhanh.</b> Collection acme, priority 9, phụ thuộc layer core, một machine là acme-board. Trong tool thật, nút Quét sâu nằm ở panel bên phải; ở đây nó là một node.',
+    kids: [cat('key files', 2, [file('conf/layer.conf'), file('conf/machine/acme-board.conf')]), acmeScan],
+  });
+  const linux = N('linux', 'repo', 'kernel', {
+    layer: 1, say: '<b>Tầng 1 của kernel.</b> Phiên bản 6.1.20 đọc từ Makefile, arch arm64 có 1 defconfig.',
+    kids: [cat('key files', 2, [file('Makefile'), file('Kconfig')]),
+      cat('Device tree', 2, [file('acme/board.dts', { kids: [file('include board.dtsi')], layer: 3, say: '<b>Tầng 3.</b> #include trong device tree được nối tới file .dtsi.' })])],
+  });
+  const board = N('board', 'repo', 'android', {
+    layer: 1, say: '<b>Tầng 1 của Android device.</b> TARGET_ARCH arm64, lunch choice acme-userdebug, và các module định nghĩa ở Android.bp.',
+    kids: [cat('Android modules', 2, [file('cc_library: libacme'), file('cc_binary: acmed')]),
+      cat('Android product / board', 3, [file('acme.mk', { kids: [file('inherit-product common:common.mk')], layer: 3, say: '<b>Tầng 3.</b> inherit-product được nối sang file ở repo device/acme/common.' }), file('BoardConfig.mk'), file('AndroidProducts.mk')])],
+  });
+  const spi = N('spi', 'repo', 'qnx', {
+    layer: 1, say: '<b>Tầng 1 của QNX.</b> Variant nto/aarch64/so.le, NAME spi-acme, cài vào usr/lib.',
+    kids: [cat('QNX variants', 1, [file('nto/aarch64/so.le')]), cat('key files', 2, [file('Makefile'), file('common.mk')])],
+  });
+  const tree = N('acme-bsp', 'root', 'dir', {
+    open: true, layer: 0, say: '<b>Tầng 0: cây repo.</b> Đọc từ manifest, mỗi màu là một loại repo. Bấm vào meta-acme.',
+    kids: [
+      N('device/acme', 'dir', 'dir', { kids: [board, N('common', 'repo', 'android')] }),
+      N('kernel', 'dir', 'dir', { kids: [linux] }),
+      N('layers', 'dir', 'dir', { open: true, kids: [metaAcme, N('poky', 'repo', 'yocto')] }),
+      N('qnx/drivers', 'dir', 'dir', { kids: [spi] }),
+      N('src', 'dir', 'dir', { kids: [N('foo-app', 'repo', 'cmake')] }),
+    ],
+  });
+  function link(n, parent) { n.parent = parent; n.kids.forEach(k => link(k, n)); return n; }
+  link(tree, null);
+
+  const NS = 'http://www.w3.org/2000/svg', ROW = 26, GAP = 34, PAD = 26;
+  const svg = document.getElementById('schematic'), canvas = svg.parentElement, say = document.getElementById('say'), layerNow = document.getElementById('layer-now');
+  const LAYER_NAME = ['cây repo', 'thông tin nhanh', 'quét sâu', 'file và tham chiếu'];
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const el = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+  const ctx = document.createElement('canvas').getContext('2d');
+  const textW = s => { ctx.font = '500 14px "Barlow Semi Condensed", "Arial Narrow", sans-serif'; return ctx.measureText(s).width; };
+  const label = n => n.count ? `${n.label}  ${n.count}` : n.label;
+  const width = n => 14 + textW(label(n));
+  const color = n => `var(--k-${n.kind}, var(--net))`;
+  const canOpen = n => n.kids.length || n.expand;
+  let sel = tree, anim = 0;
+
+  const gGrid = el('g'), gWire = el('g'), gPin = el('g');
+  svg.append(gGrid, gWire, gPin);
+  const pins = new Map();
+
+  function visible(n, out = []) { out.push(n); if (n.open) n.kids.forEach(k => visible(k, out)); return out; }
+
+  function layout() {
+    const colW = []; let row = 0;
+    (function walk(n, d) {
+      n.d = d; colW[d] = Math.max(colW[d] || 0, width(n));
+      const k = n.open ? n.kids : [];
+      if (!k.length) n.ty = row++ * ROW; else { k.forEach(c => walk(c, d + 1)); n.ty = (k[0].ty + k[k.length - 1].ty) / 2; }
+    })(tree, 0);
+    const colX = [0];
+    for (let i = 1; i < colW.length; i++) colX[i] = colX[i - 1] + colW[i - 1] + GAP;
+    const vis = visible(tree);
+    vis.forEach(n => { n.tx = PAD + colX[n.d]; n.ty += PAD; });
+    return { vis, w: PAD * 2 + colX[colX.length - 1] + colW[colW.length - 1] + 20, h: PAD * 2 + Math.max(row - 1, 0) * ROW };
+  }
+
+  function grid(w, h) {
+    gGrid.textContent = '';
+    for (let x = 0; x <= w; x += ROW / 2) gGrid.append(el('line', { x1: x, y1: 0, x2: x, y2: h, class: (x / (ROW / 2)) % 5 ? 'grid-minor' : 'grid-major' }));
+    for (let y = PAD % (ROW / 2); y <= h; y += ROW / 2) gGrid.append(el('line', { x1: 0, y1: y, x2: w, y2: y, class: Math.round((y - PAD) / (ROW / 2)) % 5 ? 'grid-minor' : 'grid-major' }));
+  }
+
+  function drawPin(n) {
+    const g = el('g', { class: 'pin t-' + n.type, tabindex: 0, role: 'treeitem' });
+    let shape;
+    if (n.type === 'cat') shape = el('rect', { x: -5, y: -5, width: 10, height: 10 });
+    else if (n.type === 'action') shape = el('path', { d: 'M-6 -6 L6 0 L-6 6 Z' });
+    else shape = el('circle', { r: n.type === 'repo' || n.type === 'root' ? 6 : n.type === 'file' ? 4 : 5 });
+    shape.setAttribute('stroke-width', 2);
+    const ring = el('circle', { class: 'ring', r: 11 });
+    const t = el('text', { x: 12, dy: '.34em' });
+    t.textContent = n.label;
+    if (n.count) { const c = el('tspan', { class: 'count', dx: 7 }); c.textContent = n.count; t.append(c); }
+    g.append(ring, shape, t);
+    g.addEventListener('click', () => pick(n));
+    g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(n); } });
+    gPin.append(g);
+    return { g, shape };
+  }
+
+  function style(n, p) {
+    const c = color(n);
+    p.shape.style.stroke = c;
+    p.shape.style.fill = n.open || !canOpen(n) ? 'var(--sheet)' : c;
+    p.g.classList.toggle('sel', n === sel);
+    p.g.classList.toggle('hint', !!n.hint && n !== sel && !n.visited);
+    if (canOpen(n)) p.g.setAttribute('aria-expanded', String(!!n.open)); else p.g.removeAttribute('aria-expanded');
+  }
+
+  function wires(vis) {
+    gWire.textContent = '';
+    for (const p of vis) {
+      const k = p.open ? p.kids : [];
+      if (!k.length) continue;
+      const x1 = p.x + width(p) + 2, xm = k[0].x - GAP / 2 + 2, ys = k.map(c => c.y);
+      const y0 = Math.min(...ys), y1 = Math.max(...ys);
+      for (const c of k) gWire.append(el('path', { class: 'wire', d: `M${x1},${p.y}H${xm}V${c.y}H${c.x - 8}` }));
+      for (const c of k) if (c.y > y0 + 0.5 && c.y < y1 - 0.5) gWire.append(el('circle', { class: 'junction', cx: xm, cy: c.y, r: 3 }));
+      if (k.length > 1 && p.y > y0 + 0.5 && p.y < y1 - 0.5 && !ys.some(y => Math.abs(y - p.y) < 0.5))
+        gWire.append(el('circle', { class: 'junction', cx: xm, cy: p.y, r: 3 }));
+    }
+  }
+
+  function render() {
+    const { vis, w, h } = layout();
+    const keep = new Set(vis);
+    for (const [n, p] of pins) if (!keep.has(n)) { p.g.remove(); pins.delete(n); }
+    for (const n of vis) {
+      if (!pins.has(n)) { pins.set(n, drawPin(n)); n.x = n.parent ? n.parent.x : n.tx; n.y = n.parent ? n.parent.y : n.ty; }
+      style(n, pins.get(n)); n.fx = n.x; n.fy = n.y;
+    }
+    const W = Math.max(w, canvas.clientWidth - 36), H = Math.max(h, 380);   // luoi phu kin khung
+    svg.setAttribute('width', W); svg.setAttribute('height', H);
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    grid(W, H);
+    const id = ++anim, t0 = performance.now(), dur = reduce ? 0 : 300;
+    (function step(now) {
+      if (id !== anim) return;
+      let t = dur ? Math.min(1, (now - t0) / dur) : 1;
+      t = 1 - Math.pow(1 - t, 3);
+      for (const n of vis) {
+        n.x = n.fx + (n.tx - n.fx) * t; n.y = n.fy + (n.ty - n.fy) * t;
+        pins.get(n).g.setAttribute('transform', `translate(${n.x},${n.y})`);
+      }
+      wires(vis);
+      if (t < 1) requestAnimationFrame(step);
+    })(t0);
+    // cuon khung de node dang chon va cac node con cua no nam trong tam nhin
+    const right = Math.max(sel.tx + width(sel), ...(sel.open ? sel.kids : []).map(k => k.tx + width(k))) + 40;
+    if (right > canvas.scrollLeft + canvas.clientWidth || sel.tx < canvas.scrollLeft)
+      canvas.scrollTo({ left: Math.max(0, right - canvas.clientWidth), behavior: reduce ? 'auto' : 'smooth' });
+  }
+
+  function pick(n) {
+    const again = sel === n;
+    const prev = sel; sel = n; n.visited = true;
+    if (n.expand) { const parent = n.parent; n.expand(n); parent.open = true; sel = parent.kids[parent.kids.length - 1]; }
+    else if (canOpen(n)) n.open = again ? !n.open : true;
+    const info = n.say ? n : sel;
+    if (info.say) say.innerHTML = info.say;
+    else say.innerHTML = `<b>${n.label}.</b> Trong tool thật, panel bên phải hiện chi tiết của node này.`;
+    const layer = n.layer ?? (n.type === 'file' ? 3 : n.type === 'cat' ? 2 : n.type === 'repo' ? 1 : 0);
+    layerNow.textContent = `${layer} ${LAYER_NAME[layer]}`;
+    if (prev && pins.get(prev)) style(prev, pins.get(prev));
+    render();
+    pins.get(sel)?.g.focus({ preventScroll: true });
+  }
+
+  say.innerHTML = tree.say;
+  render();                                            // ve ngay, ve lai khi font tai xong de do chu cho dung
+  if (document.fonts) document.fonts.ready.then(render);
+  addEventListener('resize', () => { clearTimeout(window.__rz); window.__rz = setTimeout(render, 150); });
+})();
+</script>
+</body>
+</html>

@@ -7,6 +7,9 @@ bằng giao diện web: cây repo vẽ từ manifest, bấm vào đâu thì nạ
 - Phân tích tĩnh: đọc manifest, file build/config. Không chạy bitbake/make/soong.
 - Server chỉ nghe `127.0.0.1`.
 
+Trang hướng dẫn có bản vẽ minh hoạ bấm thử được: [docs/index.html](docs/index.html)
+(bật GitHub Pages với nguồn `main` / `docs` để xem trực tuyến).
+
 ## Chạy
 
 ```sh
