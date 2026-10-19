@@ -2,6 +2,8 @@
 // Cac link trong panel mang data-a="..." va duoc xu ly tap trung qua bindPanel().
 
 import { $, esc, colorOf, KIND_COLOR, tail, store } from './util.js';
+import { t, tl } from './i18n.js';
+import { labelOf } from './tree.js';
 
 const P = $('#panel');
 
@@ -12,14 +14,14 @@ const header = (n, title, sub) => `<div class="hd"><span class="dot" style="back
 
 const h4 = (title, extra = '') => `<h4>${esc(title)}${extra !== '' ? ` <span>${esc(extra)}</span>` : ''}</h4>`;
 
-const kv = rows => `<table class="kv">${rows.map(r => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('')}</table>`;
+const kv = rows => `<table class="kv">${rows.map(r => `<tr><td>${esc(tl(r[0]))}</td><td>${esc(r[1])}</td></tr>`).join('')}</table>`;
 
 const tags = list => `<div class="tags">${list.join('')}</div>`;
 const tag = (text, color) => `<span class="tag"${color ? ` style="border-color:${color}"` : ''}>${esc(text)}</span>`;
 
 function bars(rows) {
   const max = Math.max(1, ...rows.map(r => r[1]));
-  return rows.map(([k, v]) => `<div class="bar"><span title="${esc(k)}">${esc(k)}</span>
+  return rows.map(([k, v]) => `<div class="bar"><span title="${esc(k)}">${esc(tl(k))}</span>
     <div style="width:${Math.max(2, (v / max) * 100)}%"></div><span>${v}</span></div>`).join('');
 }
 
@@ -42,45 +44,45 @@ function dirPanel(n) {
   const kinds = {};
   repos.forEach(r => (kinds[r.kind] = (kinds[r.kind] || 0) + 1));
   return header(n, n.label + '/', `${store.data.root}/${n.path}`.replace(/\/$/, ''))
-    + h4('Loại repo', repos.length) + bars(Object.entries(kinds).sort((a, b) => b[1] - a[1]))
-    + h4('Repo') + `<div class="ls">${repos.slice(0, 400).map(r =>
+    + h4(t('repoKinds'), repos.length) + bars(Object.entries(kinds).sort((a, b) => b[1] - a[1]))
+    + h4(t('repos')) + `<div class="ls">${repos.slice(0, 400).map(r =>
       repoLink(r.path, `<span class="dot" style="background:${colorOf(r)}"></span> ${esc(r.path)}`)).join('')}</div>`;
 }
 
 function repoPanel(n) {
   const i = n.ins, d = n.dp;
   let h = header(n, n.label, n.path)
-    + tags((n.r.tags.length ? n.r.tags : [n.kind]).map(t => tag(t, KIND_COLOR[t])))
-    + `<div class="btns"><button class="pri" data-a="deep">${d ? 'Quét lại' : 'Quét sâu'}</button>
-       <button data-a="copy" data-t="${esc(store.data.root + '/' + n.path)}">Copy path</button></div>`;
+    + tags((n.r.tags.length ? n.r.tags : [n.kind]).map(k => tag(k, KIND_COLOR[k])))
+    + `<div class="btns"><button class="pri" data-a="deep">${t(d ? 'rescan' : 'deepScan')}</button>
+       <button data-a="copy" data-t="${esc(store.data.root + '/' + n.path)}">${t('copyPath')}</button></div>`;
 
-  if (!i) return h + '<div class="load">Đang đọc…</div>';
+  if (!i) return h + `<div class="load">${t('reading')}</div>`;
   if (i.error) return h + `<div class="err">${esc(i.error)}</div>`;
-  for (const s of i.sections) h += h4(s.title) + kv(s.rows);
+  for (const s of i.sections) h += h4(tl(s.title)) + kv(s.rows);
   if (i.keys.length) {
-    h += h4('File chính', i.keys.length)
+    h += h4(t('keyFiles'), i.keys.length)
       + `<div class="ls">${i.keys.map(f => fileLink({ repo: n.path, f })).join('')}</div>`;
   }
   if (i.dirs.length) {
-    h += h4('Thư mục gốc', `${i.dirs.length} dir · ${i.nfiles} file`) + tags(i.dirs.map(x => tag(x + '/')));
+    h += h4(t('topDirs'), t('dirsFiles', { d: i.dirs.length, f: i.nfiles })) + tags(i.dirs.map(x => tag(x + '/')));
   }
   if (d?.error) h += `<div class="err">${esc(d.error)}</div>`;
   else if (d) {
-    h += h4('Quét sâu', `${d.total} file · ${d.src} · ${d.took}s`)
+    h += h4(t('deepScan'), t('deepInfo', { n: d.total, src: d.src, s: d.took }))
       + `<div class="ls">${d.cats.map(c => `<a data-a="cat" data-c="${c.id}">
-          <span class="dot" style="background:var(--cat)"></span> ${esc(c.label)} <small>${c.count}</small></a>`).join('')}</div>`
-      + h4('Theo đuôi file') + bars(d.ext)
-      + h4('Theo thư mục') + bars(d.top);
+          <span class="dot" style="background:var(--cat)"></span> ${esc(tl(c.label))} <small>${c.count}</small></a>`).join('')}</div>`
+      + h4(t('byExt')) + bars(d.ext)
+      + h4(t('byDir')) + bars(d.top);
   }
   return h;
 }
 
 function catPanel(n) {
-  const sub = n.repo + (n.total > n.items.length ? ` · hiện ${n.items.length}/${n.total}` : ` · ${n.total}`);
+  const sub = n.repo + ' · ' + (n.total > n.items.length ? t('showing', { a: n.items.length, b: n.total }) : n.total);
   const rows = n.items.map(it => fileLink({ ...it, repo: it.repo ?? n.repo },
     it.l ? `${esc(it.l)} <small>${esc(tail(it.f, 3))}</small>` : undefined));
-  return header(n, n.label, sub)
-    + `<input class="flt" placeholder="lọc…" data-flt=".ls a"><div class="ls">${rows.join('')}</div>`;
+  return header(n, labelOf(n), sub)
+    + `<input class="flt" placeholder="${esc(t('filter'))}" data-flt=".ls a"><div class="ls">${rows.join('')}</div>`;
 }
 
 function refTarget(r) {
@@ -99,25 +101,25 @@ function highlight(line) {
 function filePanel(n) {
   const v = n.fv;
   let h = header(n, tail(n.f, 1), (n.repo ? n.repo + '/' : '') + n.f);
-  if (!v) return h + '<div class="load">Đang đọc…</div>';
+  if (!v) return h + `<div class="load">${t('reading')}</div>`;
   if (v.error) return h + `<div class="err">${esc(v.error)}</div>`;
 
-  h += tags([tag(v.type), tag(`${v.lines} dòng`), tag(`${(v.size / 1024).toFixed(1)} KB`),
-    store.byRepo[n.repo] ? `<a class="tag lnk" data-a="repo" data-p="${esc(n.repo)}">↗ repo</a>` : '']);
+  h += tags([tag(v.type), tag(t('lines', { n: v.lines })), tag(`${(v.size / 1024).toFixed(1)} KB`),
+    store.byRepo[n.repo] ? `<a class="tag lnk" data-a="repo" data-p="${esc(n.repo)}">${t('openRepo')}</a>` : '']);
   if (v.refs.length) {
-    h += h4('Tham chiếu', v.refs.length) + `<table class="kv">${v.refs.map(r =>
+    h += h4(t('refs'), v.refs.length) + `<table class="kv">${v.refs.map(r =>
       `<tr><td>${esc(r.k)}</td><td>${refTarget(r)}</td>${lineCell(r.line)}</tr>`).join('')}</table>`;
   }
   if (v.items.length) {
-    h += h4('Mục định nghĩa', v.items.length) + `<table class="kv">${v.items.map(m =>
+    h += h4(t('defs'), v.items.length) + `<table class="kv">${v.items.map(m =>
       `<tr><td>${esc(m.type)}</td><td><b>${esc(m.name)}</b>${m.deps?.length ? `<div class="muted">${esc(m.deps.join(' '))}</div>` : ''}</td>${lineCell(m.line)}</tr>`).join('')}</table>`;
   }
   if (v.vars.length) {
-    h += h4('Biến', v.vars.length) + `<input class="flt" placeholder="lọc biến…" data-flt="#vars tr">
+    h += h4(t('vars'), v.vars.length) + `<input class="flt" placeholder="${esc(t('filterVars'))}" data-flt="#vars tr">
       <div class="scroll"><table class="kv" id="vars">${v.vars.map(([ln, k, op, val]) =>
       `<tr>${lineCell(ln)}<td>${esc(k)} <span class="muted">${esc(op)}</span></td><td>${esc(val)}</td></tr>`).join('')}</table></div>`;
   }
-  h += h4('Nội dung', v.trunc ? '(4000 dòng đầu)' : '') + `<div class="code">${v.text.split('\n').map((l, i) =>
+  h += h4(t('content'), v.trunc ? t('first4000') : '') + `<div class="code">${v.text.split('\n').map((l, i) =>
     `<div id="L${i + 1}"><b>${i + 1}</b>${highlight(l)}</div>`).join('')}</div>`;
   return h;
 }
@@ -126,13 +128,14 @@ function filePanel(n) {
 
 const RENDERERS = { root: dirPanel, dir: dirPanel, repo: repoPanel, cat: catPanel, file: filePanel };
 
-export function showPanel(n) {
+export function showPanel(n, keepScroll = false) {
   const fn = RENDERERS[n.type];
   if (!fn) return;
+  const top = P.scrollTop;
   P.classList.remove('hide');
   P.innerHTML = fn(n);
-  P.scrollTop = 0;
-  if (n.type === 'file' && n.line && n.fv) setTimeout(() => goLine(n.line), 30);
+  P.scrollTop = keepScroll ? top : 0;
+  if (!keepScroll && n.type === 'file' && n.line && n.fv) setTimeout(() => goLine(n.line), 30);
 }
 
 export function goLine(ln) {
@@ -157,7 +160,7 @@ export function bindPanel(actions) {
       case 'repo': return actions.repo(d.p);
       case 'cat': return actions.cat(d.c);
       case 'line': return goLine(+d.n);
-      case 'copy': navigator.clipboard?.writeText(d.t); a.textContent = 'Đã copy'; return;
+      case 'copy': navigator.clipboard?.writeText(d.t); a.textContent = t('copied'); return;
     }
   });
   P.addEventListener('input', e => {

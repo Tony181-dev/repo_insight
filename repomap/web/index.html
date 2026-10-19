@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="vi">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -12,32 +12,29 @@
     <div id="rootp"></div>
     <div id="stat"></div>
     <div id="sbox">
-      <input id="q" placeholder="Tìm repo…  (/)   vd: kernel · kind:qnx · kind:yocto-layer" autocomplete="off">
+      <input id="q" data-i18n-ph="searchPh" autocomplete="off">
       <div id="res"></div>
     </div>
-    <button id="b-panel" title="Ẩn/hiện panel">&#9776;</button>
+    <div id="lang" role="group" data-i18n-title="langTitle">
+      <button type="button" data-lang="en">EN</button><button type="button" data-lang="vi">VI</button>
+    </div>
+    <button id="b-panel" data-i18n-title="panelToggle">&#9776;</button>
   </header>
 
   <main id="main">
     <section id="stage">
       <div id="tools">
-        <button id="b-fit">Vừa khung</button>
-        <button id="b-more">Mở thêm 1 tầng</button>
-        <button id="b-collapse">Thu gọn</button>
+        <button id="b-fit" data-i18n="fit"></button>
+        <button id="b-more" data-i18n="expand"></button>
+        <button id="b-collapse" data-i18n="collapse"></button>
       </div>
       <svg id="svg"><g id="vp"><g id="gl"></g><g id="gn"></g></g></svg>
       <div id="legend"></div>
-      <div class="empty" id="empty">Đang đọc manifest…</div>
+      <div class="empty" id="empty" data-i18n="loading"></div>
     </section>
 
     <aside id="panel">
-      <div class="muted">
-        Bấm vào một repo trên cây để xem insight.<br><br>
-        • Bấm repo → thông tin nhanh + file chính<br>
-        • <b>Quét sâu</b> → toàn bộ file build/config, recipe, module<br>
-        • Bấm file → biến, include/require/inherit đã resolve, bấm tiếp để đi sâu<br><br>
-        Kéo để di chuyển, cuộn để zoom, <b>/</b> để tìm.
-      </div>
+      <div class="muted" data-i18n-html="help"></div>
     </aside>
   </main>
 

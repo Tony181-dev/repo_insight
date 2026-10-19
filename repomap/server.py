@@ -71,14 +71,14 @@ def make_handler(ws):
                 return self._send({'root': ws.root, 'mode': ws.mode, 'took': round(ws.took, 2),
                                    'version': __version__, 'repos': ws.repos})
             if repo not in ws.by_path and not (ep == 'file' and repo == ''):
-                return self._send({'error': 'khong co repo: ' + repo}, code=404)
+                return self._send({'error': 'no such repo: ' + repo}, code=404)
             if ep == 'insight':
                 return self._send(ws.cached(('insight', repo), lambda: insight(ws, repo), force))
             if ep == 'deep':
                 return self._send(ws.cached(('deep', repo), lambda: deep_scan(ws, repo), force))
             if ep == 'file':
                 return self._send(file_view(ws, repo, q.get('f', '')))
-            self._send({'error': 'api khong ton tai: ' + ep}, code=404)
+            self._send({'error': 'unknown api: ' + ep}, code=404)
 
     return Handler
 
@@ -99,4 +99,4 @@ def start_server(ws, host='127.0.0.1', port=8800, tries=20):
             return Server((host, p), handler)
         except OSError:
             continue
-    raise SystemExit('khong mo duoc cong %d..%d' % (port, port + tries - 1))
+    raise SystemExit('cannot open any port in %d..%d' % (port, port + tries - 1))

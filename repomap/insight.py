@@ -18,7 +18,7 @@ def _section(title, rows):
 
 
 def _manifest(p):
-    return _section('Manifest', [('name', p.get('name')), ('loai', ', '.join(p['tags']) or p['kind']),
+    return _section('Manifest', [('name', p.get('name')), ('kind', ', '.join(p['tags']) or p['kind']),
                                  ('revision', p.get('revision')), ('upstream', p.get('upstream')),
                                  ('groups', p.get('groups')), ('remote', p.get('remote')), ('url', p.get('url'))])
 
@@ -115,7 +115,7 @@ def insight(ws, repo):
     try:
         ents = sorted(os.scandir(d), key=lambda e: e.name)
     except OSError as e:
-        return {'error': 'khong mo duoc %s: %s' % (d, e)}
+        return {'error': 'cannot open %s: %s' % (d, e)}
     dirs = [e.name for e in ents if e.is_dir() and e.name != '.git']
     files = [e.name for e in ents if e.is_file()]
     tags = p['tags']

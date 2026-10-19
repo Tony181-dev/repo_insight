@@ -1,7 +1,7 @@
 // Ve cay ngang bang SVG: layout, animation, pan/zoom.
 
 import { $, colorOf, trunc, store } from './util.js';
-import { visible, countLabel, expandable } from './tree.js';
+import { visible, countLabel, expandable, labelOf } from './tree.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const CHAR_W = 7.25, ROW = 23, COL_GAP = 46, MAX_LABEL = 42, ANIM_MS = 320;
@@ -20,7 +20,7 @@ const el = (tag, attrs = {}) => {
 
 const width = n => {
   const c = countLabel(n);
-  return 12 + (trunc(n.label, MAX_LABEL).length + (c ? c.length + 1 : 0)) * CHAR_W;
+  return 12 + (trunc(labelOf(n), MAX_LABEL).length + (c ? c.length + 1 : 0)) * CHAR_W;
 };
 
 // ---------------------------------------------------------------- layout
@@ -62,12 +62,12 @@ function draw(n) {
 }
 
 function update(n, e) {
-  e.text.textContent = trunc(n.label, MAX_LABEL);
+  e.text.textContent = trunc(labelOf(n), MAX_LABEL);
   const c = countLabel(n);
   if (c) { const s = el('tspan', { class: 'cnt', dx: 7 }); s.textContent = c; e.text.append(s); }
   e.shape.style.fill = n.open || !expandable(n) ? 'var(--bg)' : colorOf(n);
   e.g.classList.toggle('sel', n === store.sel);
-  e.title.textContent = n.f ? `${n.repo}/${n.f}` : n.path || n.label;
+  e.title.textContent = n.f ? `${n.repo}/${n.f}` : n.path || labelOf(n);
 }
 
 export function refresh(n) {

@@ -52,7 +52,7 @@ def deep_scan(ws, repo):
     for f in files:
         n = f.rsplit('/', 1)[-1]
         ext[n.rsplit('.', 1)[-1].lower() if '.' in n[1:] else n] += 1
-        top[f.split('/', 1)[0] + '/' if '/' in f else '(goc)'] += 1
+        top[f.split('/', 1)[0] + '/' if '/' in f else '(root)'] += 1
         cid = categorize(f, tagstr)
         if cid:
             cats.setdefault(cid, []).append(f)

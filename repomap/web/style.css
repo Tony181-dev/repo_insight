@@ -32,6 +32,12 @@ button:disabled { opacity: .6; cursor: wait; }
 #res { position: absolute; top: 38px; right: 0; width: 520px; max-height: 65vh; overflow: auto; z-index: 20;
   background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; display: none;
   box-shadow: 0 12px 32px #0008; padding: 4px; }
+#lang { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; flex: none; }
+#lang button { border: 0; border-radius: 0; padding: 5px 9px; background: transparent; color: var(--mute); font-weight: 600; }
+#lang button + button { border-left: 1px solid var(--line); }
+#lang button[aria-pressed="true"] { background: var(--bg3); color: var(--fg); }
+#lang button:hover { color: var(--fg); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
 .ri { display: flex; gap: 8px; align-items: center; padding: 5px 8px; border-radius: 6px; cursor: pointer;
   font: 12px var(--mono); }
 .ri:hover, .ri.on { background: var(--bg3); }

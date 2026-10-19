@@ -3,6 +3,7 @@
 // Kieu node: root | dir | repo | cat (nhom file) | file | more (nap them) | goto (nhay toi repo khac)
 
 import { store, tail } from './util.js';
+import { t, tl } from './i18n.js';
 
 export const BATCH = 40;   // so file hien moi lan trong 1 nhom
 let nextId = 0;
@@ -14,6 +15,13 @@ export function node(o, parent) {
   if (parent && o.repo === undefined) o.repo = parent.type === 'repo' ? parent.path : parent.repo;
   if (o.kind === undefined) o.kind = store.byRepo[o.repo]?.kind ?? parent?.kind;
   return o;
+}
+
+// nhan hien thi theo ngon ngu dang chon (node 'more' va nhom 'key files' do giao dien tu dat ten)
+export function labelOf(n) {
+  if (n.type === 'more') return t('more', { n: n.rest });
+  if (n.i18n) return t(n.i18n);
+  return tl(n.label);
 }
 
 export function countLabel(n) {
@@ -112,7 +120,7 @@ export function fileNode(it, parent) {
 function batch(cat, offset) {
   for (const it of cat.items.slice(offset, offset + BATCH)) cat.children.push(fileNode(it, cat));
   const rest = cat.items.length - offset - BATCH;
-  if (rest > 0) cat.children.push(node({ type: 'more', label: `+${rest} nữa…`, off: offset + BATCH }, cat));
+  if (rest > 0) cat.children.push(node({ type: 'more', label: '', rest, off: offset + BATCH }, cat));
 }
 
 export function fillCat(cat) {
@@ -146,7 +154,9 @@ const catNode = (parent, grp, c) =>
 export function attachInsight(repo, ins) {
   if (ins.error || !ins.keys.length) return;
   const items = ins.keys.map(f => ({ f }));
-  repo.children.unshift(catNode(repo, 'ins', { id: 'keys', label: 'key files', items, count: items.length }));
+  const keys = catNode(repo, 'ins', { id: 'keys', label: 'key files', items, count: items.length });
+  keys.i18n = 'keyFilesCat';
+  repo.children.unshift(keys);
 }
 
 export function attachDeep(repo, deep) {

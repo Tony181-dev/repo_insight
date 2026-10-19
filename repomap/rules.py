@@ -30,7 +30,7 @@ CATS = [
     ('autotools', 'Autotools', lambda p, n, t: n in ('configure.ac', 'configure.in', 'Makefile.am')),
     ('make', 'Makefile / Kbuild / .mk', lambda p, n, t: n in ('Makefile', 'makefile', 'GNUmakefile', 'Kbuild')
      or n.endswith(('.mk', '.mak'))),
-    ('conf', 'Config khac', lambda p, n, t: n.endswith(('.conf', '.cfg', '.ini', '.yaml', '.yml', '.toml', '.json',
+    ('conf', 'Other config', lambda p, n, t: n.endswith(('.conf', '.cfg', '.ini', '.yaml', '.yml', '.toml', '.json',
                                                           '.config', '.properties'))),
 ]
 

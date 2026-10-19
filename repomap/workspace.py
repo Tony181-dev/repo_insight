@@ -55,7 +55,7 @@ class Workspace:
         """Duong dan tuyet doi, chan thoat ra ngoai workspace."""
         p = os.path.normpath(os.path.join(self.root, repo, rel))
         if p != self.root and not p.startswith(self.root + os.sep):
-            raise ValueError('ngoai workspace: ' + rel)
+            raise ValueError('outside the workspace: ' + rel)
         return p
 
     def owner(self, path):

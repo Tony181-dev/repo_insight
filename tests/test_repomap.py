@@ -15,8 +15,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, os.path.dirname(__file__))
 
 from fixture import make_workspace  # noqa: E402
-from repomap.cli import parse_args, resolve_settings  # noqa: E402
-from repomap.settings import load_settings, write_template  # noqa: E402
+from repomap.cli import apply_overrides, interactive, parse_args, resolve_settings  # noqa: E402
+from repomap.menu import run_menu  # noqa: E402
+from repomap.settings import (Settings, detect_ssh_port, load_settings, parse_sshd_ports,  # noqa: E402
+                              save_settings, write_template)
 from repomap.deepscan import deep_scan  # noqa: E402
 from repomap.fileview import file_view, ver_match  # noqa: E402
 from repomap.insight import insight  # noqa: E402
@@ -219,17 +221,88 @@ class SettingsTest(unittest.TestCase):
                     'user = dev\nhost = build01\n')
         s = load_settings(self.path)
         self.assertEqual((s.port, s.open_browser), (9100, 'no'))
-        self.assertEqual(s.tunnel_hint(9101), 'ssh -L 18800:127.0.0.1:9101 dev@build01')
+        s.ssh_port = 22
+        self.assertEqual(s.tunnel_hint(9101), 'ssh -N -L 18800:127.0.0.1:9101 dev@build01')
+        s.ssh_port, s.ssh_local_port = 2222, 0
+        self.assertEqual(s.tunnel_hint(9101), 'ssh -N -L 9101:127.0.0.1:9101 -p 2222 dev@build01')
         a = parse_args(['/ws', '--config', self.path, '--port', '9300', '--host', '0.0.0.0'])
         s = resolve_settings(a)
         self.assertEqual((s.host, s.port, s.ssh_user), ('0.0.0.0', 9300, 'dev'))
 
     def test_bad_value(self):
         os.makedirs(os.path.dirname(self.path))
-        with open(self.path, 'w') as f:
-            f.write('[server]\nport = abc\n')
-        with self.assertRaises(SystemExit):
-            load_settings(self.path)
+        for bad in ('[server]\nport = abc\n', '[ssh]\nport = 70000\n'):
+            with open(self.path, 'w') as f:
+                f.write(bad)
+            with self.assertRaises(SystemExit):
+                load_settings(self.path)
+
+    def test_save_round_trip_keeps_comments(self):
+        s = Settings(port=9200, ssh_host='build.example.com', ssh_user='dev', ssh_port=2200, workspace='/w/ws')
+        save_settings(s, self.path)
+        with open(self.path, encoding='utf-8') as f:
+            text = f.read()
+        self.assertIn('# Server port', text)
+        self.assertIn('local_port = \n', text)                        # 0 -> rong (= tu dong)
+        back = load_settings(self.path)
+        self.assertEqual((back.port, back.ssh_host, back.ssh_user, back.ssh_port, back.ssh_local_port, back.workspace),
+                         (9200, 'build.example.com', 'dev', 2200, 0, '/w/ws'))
+
+    def test_sshd_port_detection(self):
+        self.assertEqual(parse_sshd_ports('#Port 22\nPort 2222\n  port 2200\nListenAddress 0.0.0.0\n'), [2222, 2200])
+        cfg = os.path.join(self.tmp.name, 'sshd_config')
+        self.assertEqual(detect_ssh_port(cfg), (22, 'default'))      # khong co file -> 22
+        os.makedirs(os.path.join(self.tmp.name, 'sshd_config.d'))
+        with open(cfg, 'w') as f:
+            f.write('# Port 22\n')
+        with open(os.path.join(self.tmp.name, 'sshd_config.d', '10-port.conf'), 'w') as f:
+            f.write('Port 60022\n')
+        self.assertEqual(detect_ssh_port(cfg)[0], 60022)
+
+
+class MenuTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.cfg = os.path.join(self.tmp.name, 'config.ini')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_menu(self, answers, root=None, s=None):
+        it, out = iter(answers), []
+        s = s or Settings(source=self.cfg)
+        return run_menu(s, root, inp=lambda prompt: (out.append(prompt), next(it))[1], out=out.append), s, out
+
+    def test_configuration_is_saved_then_exit(self):
+        answers = ['2', 'abc', '9300', 'build.example.com', 'dev', '2222', '', '0']
+        result, s, out = self.run_menu(answers)
+        self.assertIsNone(result)
+        self.assertTrue(any('not a number' in o for o in out))          # hoi lai khi nhap sai
+        back = load_settings(self.cfg)
+        self.assertEqual((back.port, back.ssh_host, back.ssh_user, back.ssh_port, back.ssh_local_port),
+                         (9300, 'build.example.com', 'dev', 2222, 0))
+        self.assertIn('ssh -N -L 9300:127.0.0.1:9300 -p 2222 dev@build.example.com', '\n'.join(out))
+
+    def test_run_scan_asks_for_workspace(self):
+        ws = self.tmp.name
+        result, _, out = self.run_menu(['', os.path.join(ws, 'nope'), ws])     # Enter = 1. Run scan
+        self.assertEqual(result, os.path.abspath(ws))
+        self.assertTrue(any('folder not found' in o for o in out))
+
+    def test_run_scan_uses_given_root_and_unknown_choice(self):
+        result, _, out = self.run_menu(['7', '1'], root=self.tmp.name)
+        self.assertEqual(result, os.path.abspath(self.tmp.name))
+        self.assertTrue(any('Unknown choice' in o for o in out))
+
+    def test_cli_flags_are_not_saved(self):
+        saved = Settings(source=self.cfg)
+        s = apply_overrides(parse_args(['/ws', '--no-browser', '--port', '9999']), saved)
+        self.assertEqual((s.open_browser, s.port), ('no', 9999))
+        self.assertEqual((saved.open_browser, saved.port), ('auto', 8800))   # ban luu khong bi doi
+
+    def test_no_menu_when_not_interactive(self):
+        self.assertFalse(interactive(parse_args(['/ws', '--run'])))
+        self.assertFalse(interactive(parse_args(['/ws', '--json', 'x'])))
 
 
 if __name__ == '__main__':

@@ -5,6 +5,7 @@ import { buildTree, visible, collapseAll, fillCat, loadMore, ensureChild,
          attachInsight, attachDeep, attachRefs } from './tree.js';
 import { initGraph, render, refresh, centerOn, fit, resetView } from './graph.js';
 import { showPanel, bindPanel, togglePanel } from './panel.js';
+import { t, applyStatic, setLang, onLangChange } from './i18n.js';
 
 // ---------------------------------------------------------------- chon / mo node
 
@@ -59,7 +60,7 @@ async function clickNode(n, fresh = false) {
 
 async function deepScan(n, btn) {
   btn.disabled = true;
-  btn.textContent = 'Đang quét…';
+  btn.textContent = t('scanning');
   n.dp = await api('deep', { repo: n.path, force: n.dp ? 1 : 0 });
   attachDeep(n, n.dp);
   n.open = true;
@@ -100,7 +101,7 @@ function search() {
   R.innerHTML = hits.length
     ? hits.map((r, i) => `<div class="ri${i ? '' : ' on'}" data-i="${i}">
         <span class="dot" style="background:${KIND_COLOR[r.kind]}"></span>${esc(r.path)}<small>${esc(r.kind)}</small></div>`).join('')
-    : '<div class="ri muted">không thấy</div>';
+    : `<div class="ri muted">${t('noMatch')}</div>`;
   R.style.display = 'block';
 }
 
@@ -154,18 +155,39 @@ function legend(repos) {
   };
 }
 
+// ---------------------------------------------------------------- ngon ngu
+
+const status = () => {
+  const d = store.data;
+  if (d) $('#stat').textContent = t('status', { n: d.repos.length, mode: d.mode, s: d.took });
+};
+
+$('#lang').addEventListener('click', e => {
+  const b = e.target.closest('[data-lang]');
+  if (b) setLang(b.dataset.lang);
+});
+
+onLangChange(() => {
+  status();
+  if (!store.root) return;
+  render();
+  if (store.sel) showPanel(store.sel, true);
+  if (R.style.display === 'block') search();
+});
+
 // ---------------------------------------------------------------- khoi dong
 
 (async function boot() {
+  applyStatic();
   const empty = $('#empty');
   const data = await api('tree');
   if (data.error) { empty.textContent = data.error; return; }
   store.data = data;
   $('#rootp').textContent = data.root;
-  $('#stat').textContent = `${data.repos.length} repo · ${data.mode} · ${data.took}s`;
+  status();
   legend(data.repos);
   if (!data.repos.length) {
-    empty.textContent = 'Không tìm thấy repo nào (không có .repo/manifest.xml và không có thư mục .git).';
+    empty.textContent = t('noRepos');
     return;
   }
   store.root = buildTree(data);

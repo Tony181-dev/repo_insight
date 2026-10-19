@@ -257,7 +257,7 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
       <p>Đọc <code>.repo/manifest.xml</code> cùng các file include, <code>local_manifests</code>, remove/extend-project. Mỗi repo được tô màu theo loại, nhận ra bằng vài file đánh dấu ở thư mục gốc.</p></li>
     <li><span class="n">1</span><span class="when">Bấm một repo</span><h3>Thông tin nhanh</h3>
       <p>Commit đang checkout, số file đang sửa, thông tin chính theo loại repo: layer Yocto, BoardConfig, phiên bản kernel, variant QNX. Kèm danh sách file chính.</p></li>
-    <li><span class="n">2</span><span class="when">Bấm Quét sâu</span><h3>Toàn bộ file build</h3>
+    <li><span class="n">2</span><span class="when">Bấm Deep scan</span><h3>Toàn bộ file build</h3>
       <p>Liệt kê mọi file bằng <code>git ls-files</code> và gom nhóm: recipe, bbappend, machine, Android module, defconfig, device tree, buildfile QNX, CMake, Makefile…</p></li>
     <li><span class="n">3</span><span class="when">Bấm một file</span><h3>File và tham chiếu</h3>
       <p>Biến, module, nội dung, và các file được kéo theo đã tìm ra đường dẫn thật. Bấm tiếp để đi sang file đó, kể cả khi nó nằm ở repo khác.</p></li>
@@ -295,7 +295,7 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
       </svg>
       <ol class="steps">
         <li>Cài tool trên chính PC này, xem phần <a href="#cai-dat">Cài đặt</a>.</li>
-        <li>Chạy:
+        <li>Chạy rồi chọn <code>1. Run scan</code>:
           <div class="cmd"><pre>repomap ~/your_workspace_root</pre></div></li>
       </ol>
       <p>Trình duyệt tự mở tại <code>http://127.0.0.1:8800</code>. Không cần ssh.</p>
@@ -320,13 +320,22 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
       </svg>
       <ol class="steps">
         <li>Cài tool trên máy build, xem phần <a href="#cai-dat">Cài đặt</a>.</li>
-        <li>Trên máy build, chạy <code>repomap ~/your_workspace_root</code>. Tool in ra một lệnh dạng:
-          <div class="cmd"><pre>ssh -L 8800:127.0.0.1:8800 user@your_build_server</pre></div></li>
-        <li>Trên PC của bạn, chạy lệnh đó rồi giữ cửa sổ terminal mở.</li>
+        <li>Trên máy build, chạy <code>repomap ~/your_workspace_root</code>. Lần đầu, chọn <code>2. Configuration</code> để nhập port và thông tin ssh (xem <a href="#cau-hinh">Cấu hình</a>), sau đó chọn <code>1. Run scan</code>. Tool in ra một lệnh dạng:
+          <div class="cmd"><pre>ssh -N -L 8800:127.0.0.1:8800 user@your_build_server</pre></div></li>
+        <li>Trên PC của bạn, chạy lệnh đó rồi giữ cửa sổ terminal mở. Với <code>-N</code>, ssh chỉ giữ tunnel mà không mở shell, nên cửa sổ sẽ đứng yên; đó là bình thường.</li>
         <li>Mở trình duyệt trên PC, vào <code>http://127.0.0.1:8800</code>.</li>
       </ol>
       <p>Tool đọc file ở máy build, còn bạn xem giao diện trên PC qua ssh tunnel. Không phải copy source về PC.</p>
-      <p class="sub">Port, user và tên máy trong lệnh tunnel chỉnh được ở file cấu hình. Nếu port 8800 bận, tool tự chuyển sang 8801, 8802… và lệnh in ra theo port mới.</p>
+      <p class="sub">Port, user và tên máy trong lệnh tunnel chỉnh trong <code>2. Configuration</code>. Nếu port 8800 bận, tool tự chuyển sang 8801, 8802… và lệnh in ra theo port mới.</p>
+      <h3>Không ssh được</h3>
+      <p>Nếu lệnh ssh báo <code>Connection timed out</code> dù vẫn ping được máy build, thì đường ssh từ PC tới máy đó đang bị chặn, không phải lỗi của repomap. Thử lần lượt:</p>
+      <ul class="limits">
+        <li>Dùng đúng lệnh bạn vẫn ssh vào máy đó hằng ngày: cùng tên máy đầy đủ, cùng port. Nhập lại các giá trị đó trong <code>2. Configuration</code>.</li>
+        <li>Bật VPN hoặc dùng mạng có dây; nhiều nơi chỉ mở ssh từ mạng nội bộ.</li>
+        <li>Nếu phải đi qua một máy trung gian, thêm <code>-J user@jump_host</code> vào lệnh tunnel.</li>
+        <li>Nếu bạn vào máy build bằng VS Code Remote-SSH, không cần lệnh tunnel: mở tab Ports trong VS Code và forward cổng 8800.</li>
+      </ul>
+      <p class="sub">Nếu trình duyệt báo lỗi kiểu <code>"Not found." is not valid JSON</code>, cổng 8800 trên PC đang là một chương trình khác, thường vì tunnel chưa nối được.</p>
     </div>
   </div>
 </section>
@@ -344,7 +353,7 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
 cd repomap-1.0.0
 sh install.sh</pre></div></li>
         <li>Lệnh được cài vào <code>~/.local/bin/repomap</code>. Nếu thư mục này chưa có trong PATH, <code>install.sh</code> in ra dòng cần thêm vào <code>~/.bashrc</code>.</li>
-        <li>Chạy thử:
+        <li>Chạy thử. Tool hiện menu; chọn <code>2. Configuration</code> nếu cần đổi port hay thông tin ssh, rồi <code>1. Run scan</code>.
           <div class="cmd"><pre>repomap ~/your_workspace_root</pre></div></li>
       </ol>
       <div class="tbl"><table class="keys">
@@ -363,7 +372,7 @@ sh install.sh</pre></div></li>
         <li><strong>Android:</strong> sau <code>repo sync</code> thường có Python dựng sẵn trong <code>prebuilts/</code>. Tìm bằng <code>find prebuilts -path '*linux-x86*' -name 'python3*' -type f</code>.</li>
         <li><strong>Yocto:</strong> chạy <code>poky/scripts/install-buildtools</code> để tải bộ buildtools có python3 mới, sau đó <code>source</code> file môi trường mà nó in ra.</li>
         <li><strong>Python riêng trong thư mục home:</strong> giải nén một bản Python dựng sẵn cho Linux (dự án python-build-standalone, hoặc Miniforge) vào <code>~/opt/python</code>, rồi dùng <code>~/opt/python/bin/python3</code>.</li>
-        <li><strong>Chạy trên PC thay vì máy build:</strong> gắn source về PC bằng <code>sshfs your_build_server:your_workspace_root ~/your_workspace_root</code> rồi cài và chạy repomap trên PC. Nút Quét sâu với repo lớn sẽ chậm hơn vì file phải đọc qua mạng.</li>
+        <li><strong>Chạy trên PC thay vì máy build:</strong> gắn source về PC bằng <code>sshfs your_build_server:your_workspace_root ~/your_workspace_root</code> rồi cài và chạy repomap trên PC. Nút Deep scan với repo lớn sẽ chậm hơn vì file phải đọc qua mạng.</li>
       </ul>
 
       <h3>Không cần giao diện</h3>
@@ -408,11 +417,22 @@ python3 tools/make_release.py  <span class="c"># không cần make</span></pre><
   <div class="split">
     <div class="prose">
       <h2>Cấu hình</h2>
-      <p>Tạo file mẫu có sẵn chú thích, rồi sửa những dòng cần thiết:</p>
-      <div class="cmd"><pre>repomap --init-config</pre></div>
-      <p>File được ghi vào <code>~/.config/repomap/config.ini</code>. Muốn để cấu hình riêng cho một thư mục, đặt file tên <code>repomap.ini</code> ở đó, hoặc chỉ định bằng <code>--config</code>.</p>
-      <p>Tham số dòng lệnh luôn thắng file cấu hình: <code>--port</code>, <code>--host</code>, <code>--no-browser</code>, <code>--workers</code>.</p>
-      <p class="sub">Thứ tự tìm file: <code>--config</code>, biến <code>$REPOMAP_CONFIG</code>, <code>./repomap.ini</code>, rồi <code>~/.config/repomap/config.ini</code>.</p>
+      <p>Chạy <code>repomap</code> trong terminal sẽ hiện menu:</p>
+      <div class="cmd"><pre>  1. Run scan
+  2. Configuration
+  0. Exit
+Choose [1]:</pre></div>
+      <p>Chọn <code>2. Configuration</code> để nhập port của server và thông tin dùng cho lệnh ssh tunnel. Bấm Enter để giữ giá trị trong ngoặc vuông:</p>
+      <ul class="names">
+        <li><strong>Server port:</strong> cổng repomap mở trên máy build, mặc định 8800.</li>
+        <li><strong>SSH host:</strong> tên hoặc IP bạn dùng để ssh vào máy build từ PC. Mặc định là tên đầy đủ của máy.</li>
+        <li><strong>SSH user:</strong> tài khoản ssh của bạn, mặc định là user hiện tại.</li>
+        <li><strong>SSH port:</strong> tool tự đọc từ <code>/etc/ssh/sshd_config</code>, không có thì dùng 22. Nếu khác 22, lệnh tunnel có thêm <code>-p</code>.</li>
+        <li><strong>Local port on your PC:</strong> cổng trên PC của bạn, mặc định trùng với server port.</li>
+      </ul>
+      <p>Cấu hình được lưu vào <code>~/.config/repomap/config.ini</code> nên lần sau không phải nhập lại. Workspace quét lần trước cũng được nhớ, nên chọn <code>1. Run scan</code> chỉ cần bấm Enter.</p>
+      <p>Tham số dòng lệnh luôn thắng file cấu hình: <code>--port</code>, <code>--host</code>, <code>--no-browser</code>, <code>--workers</code>. Dùng <code>--run</code> để bỏ qua menu, ví dụ trong script; khi không chạy trong terminal, tool cũng tự bỏ qua menu.</p>
+      <p class="sub">Có thể sửa file bằng tay; tạo file mẫu có chú thích bằng <code>repomap --init-config</code>. Thứ tự tìm file: <code>--config</code>, biến <code>$REPOMAP_CONFIG</code>, <code>./repomap.ini</code>, rồi <code>~/.config/repomap/config.ini</code>.</p>
     </div>
     <div class="cmd"><pre>[server]
 host = 127.0.0.1     <span class="c"># 0.0.0.0 mở cho cả mạng, không có mật khẩu</span>
@@ -421,11 +441,13 @@ port_tries = 20
 open_browser = auto  <span class="c"># auto, yes hoặc no</span>
 
 [ssh]                <span class="c"># dùng để in lệnh tunnel</span>
-local_port =         <span class="c"># trống: giống port server</span>
-user = dev
 host = your_build_server
+user = user
+port =               <span class="c"># trống: đọc từ sshd_config, mặc định 22</span>
+local_port =         <span class="c"># trống: giống port server</span>
 
 [scan]
+workspace = /home/user/your_workspace_root
 workers = 0          <span class="c"># 0: tự chọn theo số CPU</span></pre></div>
   </div>
 </section>
@@ -472,9 +494,10 @@ workers = 0          <span class="c"># 0: tự chọn theo số CPU</span></pre>
           <tr><td>Bấm lại node đang chọn</td><td>Thu nhánh đó lại.</td></tr>
           <tr><td>Kéo, cuộn chuột</td><td>Di chuyển và phóng to bản vẽ.</td></tr>
           <tr><td><kbd>/</kbd></td><td>Tìm repo theo đường dẫn hoặc tên. Gõ <code>kind:qnx</code> để lọc theo loại; bấm vào chú thích màu ở góc dưới cũng ra kết quả tương tự.</td></tr>
-          <tr><td>Nút Quét sâu</td><td>Trong panel của repo. Bấm lần nữa để quét lại sau khi bạn đổi file.</td></tr>
+          <tr><td>Nút Deep scan (Quét sâu)</td><td>Trong panel của repo. Bấm lần nữa (Rescan) để quét lại sau khi bạn đổi file.</td></tr>
           <tr><td>Số dòng trong panel</td><td>Nhảy tới dòng đó trong phần nội dung file.</td></tr>
-          <tr><td>Vừa khung, Mở thêm 1 tầng, Thu gọn</td><td>Căn bản vẽ vừa màn hình, mở rộng mọi thư mục đang thấy thêm một cấp, hoặc đóng hết về gốc.</td></tr>
+          <tr><td>Fit, Expand one level, Collapse</td><td>Căn bản vẽ vừa màn hình, mở rộng mọi thư mục đang thấy thêm một cấp, hoặc đóng hết về gốc.</td></tr>
+          <tr><td>Nút EN / VI</td><td>Cạnh ô tìm kiếm. Đổi giao diện giữa tiếng Anh (mặc định) và tiếng Việt; trình duyệt nhớ lựa chọn cho lần sau.</td></tr>
         </tbody>
       </table></div>
     </div>
@@ -546,14 +569,14 @@ workers = 0          <span class="c"># 0: tự chọn theo số CPU</span></pre>
   });
   const acmeDeep = [cat('Yocto machine', 1, [file('acme-board')]), cat('Recipe .bb', 1, [file('foo · 1.0')]),
     cat('.bbappend', 1, [bbappend], { hint: true, layer: 2, say: '<b>Tầng 2.</b> Mỗi nhóm mở ra danh sách file. Bấm vào file bbappend.' })];
-  const acmeScan = N('Quét sâu', 'action', 'net', {
+  const acmeScan = N('Deep scan', 'action', 'net', {
     hint: true, layer: 2,
     say: '<b>Tầng 2: quét sâu.</b> repomap liệt kê mọi file của repo bằng git ls-files rồi gom nhóm. Mở nhóm .bbappend.',
     expand: n => n.parent.kids.splice(n.parent.kids.indexOf(n), 1, ...acmeDeep.map(c => link(c, n.parent))),
   });
   const metaAcme = N('meta-acme', 'repo', 'yocto', {
     hint: true, layer: 1,
-    say: '<b>Tầng 1: thông tin nhanh.</b> Collection acme, priority 9, phụ thuộc layer core, một machine là acme-board. Trong tool thật, nút Quét sâu nằm ở panel bên phải; ở đây nó là một node.',
+    say: '<b>Tầng 1: thông tin nhanh.</b> Collection acme, priority 9, phụ thuộc layer core, một machine là acme-board. Trong tool thật, nút Deep scan (Quét sâu) nằm ở panel bên phải; ở đây nó là một node.',
     kids: [cat('key files', 2, [file('conf/layer.conf'), file('conf/machine/acme-board.conf')]), acmeScan],
   });
   const linux = N('linux', 'repo', 'kernel', {

@@ -24,19 +24,25 @@ CÀI ĐẶT TRÊN MÁY BUILD LINUX
        repomap ~/your_workspace_root
 
      ~/your_workspace_root là thư mục gốc bạn đã chạy `repo sync`, có thư mục .repo/ bên trong.
+     Tool hiện menu:
+       1. Run scan        quét và mở server
+       2. Configuration   nhập port server và thông tin ssh (lưu lại cho lần sau)
+       0. Exit
 
 
 XEM GIAO DIỆN TỪ PC
 
-  repomap in ra một lệnh dạng:
-       ssh -L 8800:127.0.0.1:8800 user@your_build_server
+  Sau "1. Run scan", repomap in ra một lệnh dạng:
+       ssh -N -L 8800:127.0.0.1:8800 user@your_build_server
   Chạy lệnh đó trên PC của bạn, giữ cửa sổ mở, rồi mở http://127.0.0.1:8800
+  Tên máy, user và port ssh trong lệnh chỉnh ở "2. Configuration".
+  Giao diện có nút EN / VI cạnh ô tìm kiếm.
 
 
 TUỲ CHỌN
 
+  Bỏ qua menu:               repomap ~/your_workspace_root --run
   Không muốn cài:            python3 repomap.pyz ~/your_workspace_root
   Máy build có Python cũ:    PYTHON=/duong/dan/python3.8+ sh install.sh
   Cài vào thư mục khác:      sh install.sh --prefix /opt/tools
   Gỡ cài đặt:                sh install.sh --uninstall
-  Tạo file cấu hình mẫu:     repomap --init-config

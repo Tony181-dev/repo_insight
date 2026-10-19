@@ -105,10 +105,10 @@ def _bbappend_refs(ws, rel, abspath):
 def file_view(ws, repo, rel):
     path = ws.abs(repo, rel)
     if not os.path.isfile(path):
-        return {'error': 'khong phai file: ' + rel}
+        return {'error': 'not a file: ' + rel}
     text = read_text(path, 2 * 1024 * 1024)
     if text is None:
-        return {'error': 'file nhi phan / khong doc duoc'}
+        return {'error': 'binary or unreadable file'}
     res = parse_file(rel, text)
     for r in res['refs']:
         to = resolve_ref(ws, repo, rel, r['k'], r['raw'])

@@ -21,16 +21,24 @@ Trong các lệnh dưới đây, thay các tên mẫu bằng giá trị thật c
 | `user` | tài khoản ssh trên máy build | `dev` |
 
 ```sh
-python3 -m repomap ~/your_workspace_root            # từ source
-./dist/repomap.pyz ~/your_workspace_root            # bản đóng gói 1 file
-repomap ~/your_workspace_root --port 9000 --no-browser
+repomap ~/your_workspace_root                       # menu: 1. Run scan / 2. Configuration / 0. Exit
+repomap                                             # như trên, dùng workspace đã quét lần trước
+repomap ~/your_workspace_root --run                 # bỏ qua menu, chạy ngay (dùng trong script)
 repomap ~/your_workspace_root --json vendor/foo     # in JSON insight + quét sâu 1 repo
+python3 -m repomap ...                              # chạy từ source, cùng tham số
 ```
 
-Máy build ở xa: chạy `repomap ~/your_workspace_root` trên máy đó, tool in sẵn lệnh tunnel đúng port, ví dụ
-`ssh -L 8800:127.0.0.1:8800 user@your_build_server`; chạy lệnh đó trên máy bạn rồi mở http://127.0.0.1:8800.
+Máy build ở xa: chạy `repomap ~/your_workspace_root` trên máy đó; lần đầu chọn `2. Configuration` để nhập
+port server, ssh host/user/port (port ssh tự đọc từ `/etc/ssh/sshd_config`), rồi `1. Run scan`.
+Tool in sẵn lệnh tunnel, ví dụ `ssh -N -L 8800:127.0.0.1:8800 user@your_build_server`
+(thêm `-p <port>` nếu ssh không ở port 22); chạy lệnh đó trên PC, giữ cửa sổ mở, rồi mở http://127.0.0.1:8800.
+
+Giao diện có nút **EN / VI** cạnh ô tìm kiếm (mặc định tiếng Anh).
 
 ## Cấu hình
+
+Cách dễ nhất là menu `2. Configuration`: nhập rồi lưu vào `~/.config/repomap/config.ini`, lần sau không
+phải nhập lại. Workspace quét lần trước cũng được nhớ. Cũng có thể sửa file bằng tay:
 
 ```sh
 repomap --init-config                 # tạo ~/.config/repomap/config.ini (có chú thích)
@@ -45,12 +53,14 @@ port = 8800           # bận thì tự thử port+1… tối đa port_tries l�
 port_tries = 20
 open_browser = auto   # auto: chỉ mở khi có màn hình (DISPLAY/WAYLAND_DISPLAY); yes / no
 
-[ssh]                 # để in lệnh: ssh -L <local_port>:127.0.0.1:<port> <user>@<host>
-local_port =          # trống = giống port server
+[ssh]                 # để in lệnh: ssh -N -L <local_port>:127.0.0.1:<port> [-p <port>] <user>@<host>
+host =                # trống = tên đầy đủ (FQDN) của máy này
 user =                # trống = user hiện tại
-host =                # trống = hostname máy này
+port =                # trống = đọc từ /etc/ssh/sshd_config, mặc định 22
+local_port =          # trống = giống port server
 
 [scan]
+workspace =           # workspace quét lần trước (menu tự điền)
 workers = 0           # 0 = tự chọn theo số CPU
 ```
 
@@ -71,7 +81,8 @@ File được tìm theo thứ tự: `--config` > `$REPOMAP_CONFIG` > `./repomap.
 ```
 repomap/
   cli.py         dòng lệnh
-  settings.py    file cấu hình INI (host, port, ssh tunnel, ...)
+  menu.py        menu tương tác: Run scan / Configuration
+  settings.py    file cấu hình INI (host, port, ssh tunnel, ...), dò port sshd
   server.py      HTTP server + API JSON (/api/tree, insight, deep, file)
   workspace.py   danh sách repo, ánh xạ đường dẫn ↔ repo, cache, chỉ mục Yocto
   manifest.py    đọc manifest repo / tìm .git            (tầng 0)
@@ -81,7 +92,7 @@ repomap/
   fileview.py    xem 1 file + resolve tham chiếu          (tầng 3)
   parsers.py     parser BitBake/Make/Android.bp/Kconfig/DTS/CMake/QNX
   rules.py       bảng nhóm file + biến quan trọng (sửa ở đây để thêm loại mới)
-  web/           index.html, style.css, js/{main,tree,graph,panel,util}.js
+  web/           index.html, style.css, js/{main,tree,graph,panel,util,i18n}.js
 tests/           unittest với workspace giả lập
 tools/           build_pyz.py, make_release.py, install.sh, release_readme.txt (gói phát hành)
 legacy/          modmap.py - bản 1 file cũ, giữ để tham khảo, không còn phát triển
