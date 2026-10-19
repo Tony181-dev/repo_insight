@@ -3,7 +3,8 @@
   GET /api/tree                       -> danh sach repo (tang 0)
   GET /api/insight?repo=PATH[&force=1] -> tang 1
   GET /api/deep?repo=PATH[&force=1]    -> tang 2
-  GET /api/file?repo=PATH&f=REL        -> tang 3
+  GET /api/file?repo=PATH&f=REL        -> tang 3 (metadata + doan dau)
+  GET /api/lines?repo=PATH&f=REL&from=N&n=M -> doan dong tiep theo cua file dai
   GET /api/ls?repo=PATH&dir=REL        -> full source: noi dung 1 thu muc
   GET /api/search?repo=PATH&base=REL&q=TEXT&mode=name|text -> full source: tim file / tim noi dung
 """
@@ -17,7 +18,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import __version__
 from .deepscan import deep_scan
-from .fileview import file_view
+from .fileview import file_lines, file_view
 from .insight import insight
 from .source import list_dir, search
 
@@ -73,7 +74,7 @@ def make_handler(ws):
             if ep == 'tree':
                 return self._send({'root': ws.root, 'mode': ws.mode, 'took': round(ws.took, 2),
                                    'version': __version__, 'repos': ws.repos})
-            if repo not in ws.by_path and not (ep in ('file', 'ls') and repo == ''):
+            if repo not in ws.by_path and not (ep in ('file', 'lines', 'ls') and repo == ''):
                 return self._send({'error': 'no such repo: ' + repo}, code=404)
             if ep == 'insight':
                 return self._send(ws.cached(('insight', repo), lambda: insight(ws, repo), force))
@@ -81,6 +82,8 @@ def make_handler(ws):
                 return self._send(ws.cached(('deep', repo), lambda: deep_scan(ws, repo), force))
             if ep == 'file':
                 return self._send(file_view(ws, repo, q.get('f', '')))
+            if ep == 'lines':
+                return self._send(file_lines(ws, repo, q.get('f', ''), q.get('from', 1), q.get('n', 2000)))
             if ep == 'ls':
                 return self._send(list_dir(ws, repo, q.get('dir', '')))
             if ep == 'search':

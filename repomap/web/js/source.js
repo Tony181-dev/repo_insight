@@ -4,7 +4,7 @@
 
 import { $, esc, api, tail, store, colorOf } from './util.js';
 import { t, onLangChange } from './i18n.js';
-import { highlightLines, langOf } from './highlight.js';
+import { createCodeView } from './codeview.js';
 
 const V = $('#source'), TREE = $('#src-tree'), VIEW = $('#src-view'), TITLE = $('#src-title');
 const FIND = $('#src-find'), GREP = $('#src-grep');
@@ -15,6 +15,7 @@ let listing = new Map();        // thu muc (tuong doi repo) -> {dirs, files} | {
 let expanded = new Set();
 let results = null;             // ket qua tim kiem dang hien thay cho cay
 let entered = false;            // da pushState khi vao man hinh nay chua
+let code = null;                // khung code (codeview.js) cua file dang mo
 
 const join = (a, b) => (a ? a + '/' + b : b);
 const inModule = (repo, f) => repo === mod.repo && (!mod.base || f === mod.base || f.startsWith(mod.base + '/'));
@@ -106,6 +107,8 @@ function clearSearch() {
 // ---------------------------------------------------------------- noi dung file
 
 function renderView() {
+  code?.destroy();
+  code = null;
   if (!cur) { VIEW.innerHTML = `<div class="src-empty">${t('pickFile')}</div>`; return; }
   const v = cur.fv;
   let h = `<div class="src-head"><div class="ttl">${esc(tail(cur.f, 1))}</div><div class="sub">${esc(mod.repo + '/' + cur.f)}</div>`;
@@ -123,23 +126,17 @@ function renderView() {
     h += `<div class="src-chips"><span>${t('outline')}</span>` + v.items.slice(0, 300).map(m =>
       `<button class="chip-out" data-n="${m.line}">${esc(m.type)} <b>${esc(m.name)}</b></button>`).join('') + '</div>';
   }
-  const refLine = new Map(refs.filter(r => r.to && r.line).map(r => [r.line, refs.indexOf(r)]));
-  h += `<div class="code src-code">${highlightLines(v.text, langOf(cur.f)).map((l, i) => {
-    const n = i + 1, ri = refLine.get(n);
-    return `<div id="S${n}"${ri !== undefined ? ` class="ref" data-ref="${ri}"` : ''}><b>${n}</b>${l || ' '}</div>`;
-  }).join('')}</div>`;
-  if (v.trunc) h += `<div class="muted">${t('first4000')}</div>`;
+  if (v.truncated || v.partial) h += `<div class="muted">${t(v.truncated ? 'tooBig' : 'partialParse')}</div>`;
+  h += '<div class="code src-code"></div>';
   VIEW.innerHTML = h;
   VIEW._refs = refs;
-  if (cur.line) goLine(cur.line); else VIEW.scrollTop = 0;
+  const refLines = new Map(refs.filter(r => r.to && r.line).map(r => [r.line, refs.indexOf(r)]));
+  code = createCodeView(VIEW.querySelector('.src-code'), { repo: mod.repo, f: cur.f, fv: v, refLines });
+  if (cur.line) goLine(cur.line);
 }
 
 function goLine(n) {
-  const row = document.getElementById('S' + n);
-  if (!row) return;
-  VIEW.querySelectorAll('.src-code .hl').forEach(x => x.classList.remove('hl'));
-  row.classList.add('hl');
-  row.scrollIntoView({ block: 'center' });
+  code?.goLine(n);
 }
 
 async function openFile(f, line = 0) {

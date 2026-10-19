@@ -20,7 +20,7 @@ from repomap.menu import run_menu  # noqa: E402
 from repomap.settings import (Settings, detect_ssh_port, load_settings, parse_sshd_ports,  # noqa: E402
                               save_settings, write_template)
 from repomap.deepscan import deep_scan  # noqa: E402
-from repomap.fileview import file_view, ver_match  # noqa: E402
+from repomap.fileview import file_lines, file_view, ver_match  # noqa: E402
 from repomap.insight import insight  # noqa: E402
 from repomap.parsers import bp_modules, parse_file, parse_vars  # noqa: E402
 from repomap.server import start_server  # noqa: E402
@@ -176,6 +176,22 @@ class WorkspaceTest(unittest.TestCase):
         text = search(self.ws, 'tools/extra', 'src', 'DEF RUN', 'text')['results']
         self.assertEqual(text, [{'f': 'src/pyapp/core.py', 'n': 5, 'text': 'def run():'}])
         self.assertIn('error', search(self.ws, 'tools/extra', '', 'x', 'name'))
+
+    def test_long_file_is_not_cut(self):
+        path = self.ws.abs('src/foo-app', 'big.c')
+        with open(path, 'w', newline='\n') as f:
+            f.write('\n'.join('int v%d;' % i for i in range(1, 12001)) + '\n#include "foo.h"\n')
+        v = file_view(self.ws, 'src/foo-app', 'big.c')
+        self.assertEqual((v['lines'], v['chunk'], v['partial'], v['truncated']), (12002, 2000, False, False))
+        self.assertEqual(v['text'].count('\n'), 1999)                            # chi gui doan dau
+        self.assertIn(('include', 'foo.h', 12001), [(r['k'], r['raw'], r['line']) for r in v['refs']])  # tinh tren ca file
+        part = file_lines(self.ws, 'src/foo-app', 'big.c', 10000, 3)
+        self.assertEqual(part['lines'], ['int v10000;', 'int v10001;', 'int v10002;'])
+        self.assertEqual(file_lines(self.ws, 'src/foo-app', 'big.c', 12001, 5000)['lines'], ['#include "foo.h"', ''])
+        with open(path, 'a') as f:                                               # file doi -> doc lai, khong dung cache cu
+            f.write('int tail;\n')
+        self.assertEqual(file_lines(self.ws, 'src/foo-app', 'big.c', 12002, 1)['lines'], ['int tail;'])
+        os.remove(path)
 
     def test_file_view_errors(self):
         self.assertIn('error', file_view(self.ws, 'kernel/linux', 'nope.c'))

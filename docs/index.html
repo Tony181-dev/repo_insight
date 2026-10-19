@@ -521,7 +521,8 @@ workers = 0          <span class="c"># 0: tự chọn theo số CPU</span></pre>
         <li>Thư viện phụ thuộc của Android module chỉ hiện tên, chưa nối sang repo định nghĩa module đó.</li>
         <li><code>#include</code> của C/C++ được nối theo kiểu đoán tốt nhất: cùng thư mục, thư mục cha, <code>include/</code>, rồi tìm file cùng tên trong repo. Khi chưa build thì không có include path thật, nên có lúc sẽ nối nhầm hoặc không nối được. <code>#include &lt;…&gt;</code> của thư viện hệ thống không nối.</li>
         <li>YAML (CI, Ansible, compose) được đọc theo thụt lề, không dùng thư viện YAML; anchor, alias và cú pháp phức tạp có thể bị bỏ qua.</li>
-        <li>Mỗi nhóm file gửi tối đa 600 mục về giao diện; nội dung file hiện 4000 dòng đầu.</li>
+        <li>Mỗi nhóm file gửi tối đa 600 mục về giao diện.</li>
+        <li>Nội dung file hiện đủ, không cắt: trình duyệt chỉ vẽ các dòng đang thấy và nạp tiếp từng đoạn 2000 dòng khi bạn cuộn hoặc nhảy tới. File trên 32 MB chỉ đọc 32 MB đầu; với file trên 4 MB (thường là file sinh tự động), tham chiếu và cấu trúc chỉ tính trên 4 MB đầu.</li>
         <li>Workspace không có manifest vẫn dùng được: tool tìm các thư mục <code>.git</code> sâu tối đa 6 cấp.</li>
       </ul>
       <!-- maintainer:start -->

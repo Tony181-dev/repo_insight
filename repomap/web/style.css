@@ -111,6 +111,13 @@ input.flt { width: 100%; background: var(--bg); color: var(--fg); border: 1px so
 .code div.hl { background: #3b2f0b; }
 .code b { display: inline-block; width: 48px; text-align: right; padding-right: 10px; color: #4b5563;
   font-weight: 400; user-select: none; }
+/* khung code ao (codeview.js): moi dong cao dung 18px de tinh vi tri */
+.code.vcode { padding: 0; }
+.vcode .vc-space { position: relative; padding: 0; }
+.vcode .vc-win { position: absolute; left: 0; top: 0; min-width: 100%; padding: 0; }
+.vcode .vc-win > div { height: 18px; line-height: 18px; white-space: pre; padding-right: 10px; }
+.vcode b { width: calc(var(--gw, 4ch) + 16px); }
+
 /* to mau code (highlight.js) */
 .tk-cm { color: #6e7781; font-style: italic; }
 .tk-st { color: #a5d6ff; }
@@ -147,11 +154,14 @@ input.flt { width: 100%; background: var(--bg); color: var(--fg); border: 1px so
 .tn.hit code { color: #c9d1d9; font-size: 11.5px; white-space: pre-wrap; word-break: break-all; }
 .src-res-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px 8px;
   color: var(--mute); font-size: 12px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
-#src-view { flex: 1; overflow: auto; padding: 14px 18px 40px; min-width: 0; }
+#src-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 14px 18px 12px; min-width: 0; }
+#src-view > * { flex: none; }
+#src-view > .src-code { flex: 1; min-height: 0; }
 .src-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-bottom: 10px; }
 .src-head .tags { margin: 0; }
 .src-empty { color: var(--mute); padding: 40px 0; }
-.src-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin: 0 0 10px; font-size: 12px; }
+.src-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin: 0 0 10px; font-size: 12px;
+  max-height: 20vh; overflow: auto; }
 .src-chips > span:first-child { color: var(--mute); margin-right: 4px; }
 .chip-ref, .chip-out { font: 11.5px var(--mono); padding: 2px 8px; border-radius: 5px; }
 .chip-ref.off { border: 1px dashed var(--line); color: var(--mute); }

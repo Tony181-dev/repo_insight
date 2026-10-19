@@ -1,11 +1,40 @@
-"""Tang 3: xem 1 file - bien, item, tham chieu da resolve (include/require/inherit/bbappend/SRC_URI)."""
+"""Tang 3: xem 1 file - bien, item, tham chieu da resolve (include/require/inherit/bbappend/SRC_URI).
+
+File dai khong bi cat: file_view tra metadata + doan dau (CHUNK dong), giao dien nap tiep cac doan khac
+bang file_lines() khi cuon toi. Noi dung cac file vua mo duoc giu trong bo nho (LRU nho).
+"""
 import os
 import re
+import threading
+from collections import OrderedDict
 
 from .parsers import ftype, parse_file
 from .util import bb_name, read_text
 
-MAX_LINES = 4000
+CHUNK = 2000                    # so dong moi doan gui ve giao dien
+MAX_READ = 32 * 1024 * 1024     # doc toi da 32 MB moi file
+MAX_PARSE = 4 * 1024 * 1024     # tham chieu / muc luc tinh tren 4 MB dau (file sinh tu dong rat lon)
+_recent, _recent_lock = OrderedDict(), threading.Lock()
+
+
+def _lines(path):
+    """Cac dong cua file (co cache theo mtime/size), hoac None neu nhi phan / khong doc duoc."""
+    try:
+        st = os.stat(path)
+    except OSError:
+        return None
+    key = (path, st.st_mtime, st.st_size)
+    with _recent_lock:
+        if key in _recent:
+            _recent.move_to_end(key)
+            return _recent[key]
+    text = read_text(path, MAX_READ)
+    lines = None if text is None else text.split('\n')
+    with _recent_lock:
+        _recent[key] = lines
+        while len(_recent) > 8:
+            _recent.popitem(last=False)
+    return lines
 
 
 def ver_match(append_ver, recipe_ver):
@@ -147,10 +176,11 @@ def file_view(ws, repo, rel):
     path = ws.abs(repo, rel)
     if not os.path.isfile(path):
         return {'error': 'not a file: ' + rel}
-    text = read_text(path, 2 * 1024 * 1024)
-    if text is None:
+    lines = _lines(path)
+    if lines is None:
         return {'error': 'binary or unreadable file'}
-    res = parse_file(rel, text)
+    text = '\n'.join(lines)
+    res = parse_file(rel, text[:MAX_PARSE])
     refs, seen = [], set()
     for r in res['refs']:
         to = resolve_ref(ws, repo, rel, r['k'], r['raw'])
@@ -164,7 +194,18 @@ def file_view(ws, repo, rel):
     res['refs'] = refs
     if rel.endswith(('.bb', '.bbappend')):
         res['refs'] += _bbappend_refs(ws, rel, path)
-    lines = text.split('\n')
-    res.update({'repo': repo, 'file': rel, 'size': os.path.getsize(path), 'lines': len(lines),
-                'text': '\n'.join(lines[:MAX_LINES]), 'trunc': len(lines) > MAX_LINES, 'vars': res['vars'][:2000]})
+    size = os.path.getsize(path)
+    res.update({'repo': repo, 'file': rel, 'size': size, 'lines': len(lines), 'chunk': CHUNK,
+                'text': '\n'.join(lines[:CHUNK]), 'vars': res['vars'][:2000],
+                'partial': len(text) > MAX_PARSE,        # tham chieu/muc luc chi tinh tren phan dau
+                'truncated': size > MAX_READ})           # file > 32 MB: chi doc phan dau
     return res
+
+
+def file_lines(ws, repo, rel, start=1, count=CHUNK):
+    """Doan dong [start, start+count) cua file (so dong tinh tu 1)."""
+    lines = _lines(ws.abs(repo, rel))
+    if lines is None:
+        return {'error': 'binary or unreadable file'}
+    start, count = max(1, int(start)), max(1, min(int(count), 5000))
+    return {'from': start, 'lines': lines[start - 1:start - 1 + count], 'total': len(lines)}

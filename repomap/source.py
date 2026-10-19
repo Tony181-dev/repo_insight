@@ -8,6 +8,7 @@ import os
 import subprocess
 import time
 
+from .fileview import MAX_READ
 from .util import read_text
 
 MAX_ENTRIES = 5000
@@ -77,7 +78,7 @@ def _git_grep(ws, repo, base, q):
 def _scan_grep(ws, repo, base, q, max_files=20000):
     pre, ql, out = (base + '/' if base else ''), q.lower(), []
     for f in [f for f in ws.repo_files(repo)[0] if f.startswith(pre)][:max_files]:
-        text = read_text(ws.abs(repo, f), 1024 * 1024)
+        text = read_text(ws.abs(repo, f), MAX_READ)
         if not text or ql not in text.lower():
             continue
         for i, line in enumerate(text.splitlines(), 1):

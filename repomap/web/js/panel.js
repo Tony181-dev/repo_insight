@@ -4,7 +4,7 @@
 import { $, esc, colorOf, KIND_COLOR, tail, store } from './util.js';
 import { t, tl } from './i18n.js';
 import { labelOf } from './tree.js';
-import { highlightLines, langOf } from './highlight.js';
+import { createCodeView } from './codeview.js';
 
 const P = $('#panel');
 
@@ -119,8 +119,8 @@ function filePanel(n) {
       <div class="scroll"><table class="kv" id="vars">${v.vars.map(([ln, k, op, val]) =>
       `<tr>${lineCell(ln)}<td>${esc(k)} <span class="muted">${esc(op)}</span></td><td>${esc(val)}</td></tr>`).join('')}</table></div>`;
   }
-  h += h4(t('content'), v.trunc ? t('first4000') : '') + `<div class="code">${highlightLines(v.text, langOf(n.f)).map((l, i) =>
-    `<div id="L${i + 1}"><b>${i + 1}</b>${l}</div>`).join('')}</div>`;
+  h += h4(t('content'), v.truncated ? t('tooBig') : '') + (v.partial ? `<div class="muted">${t('partialParse')}</div>` : '')
+    + '<div class="code" id="pcode"></div>';
   return h;
 }
 
@@ -128,22 +128,28 @@ function filePanel(n) {
 
 const RENDERERS = { root: dirPanel, dir: dirPanel, repo: repoPanel, cat: catPanel, file: filePanel };
 
+let code = null;                // khung code cua file dang hien trong panel
+
 export function showPanel(n, keepScroll = false) {
   const fn = RENDERERS[n.type];
   if (!fn) return;
   const top = P.scrollTop;
+  code?.destroy();
+  code = null;
   P.classList.remove('hide');
   P.innerHTML = fn(n);
   P.scrollTop = keepScroll ? top : 0;
-  if (!keepScroll && n.type === 'file' && n.line && n.fv) setTimeout(() => goLine(n.line), 30);
+  const box = P.querySelector('#pcode');
+  if (box) {
+    code = createCodeView(box, { repo: n.repo, f: n.f, fv: n.fv });
+    if (!keepScroll && n.line) setTimeout(() => goLine(n.line), 30);
+  }
 }
 
 export function goLine(ln) {
-  const row = document.getElementById('L' + ln);
-  if (!row) return;
-  P.querySelectorAll('.code .hl').forEach(x => x.classList.remove('hl'));
-  row.classList.add('hl');
-  row.scrollIntoView({ block: 'center' });
+  if (!code) return;
+  P.querySelector('#pcode').scrollIntoView({ block: 'nearest' });
+  code.goLine(ln);
 }
 
 export const togglePanel = () => P.classList.toggle('hide');
