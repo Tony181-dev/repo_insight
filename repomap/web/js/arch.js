@@ -1,16 +1,17 @@
 // Block view: kien truc tong cua workspace. Moi dai = 1 tang (app / lib / HAL / ext / kernel / board / build),
 // moi khoi = 1 repo trong 1 tang, ben trong la cac component tu nhan dien (/api/arch).
 // Mac dinh khoi thu gon (ten + tom tat so component theo loai); bam khoi: mo ra, ve phu thuoc (dung / bi dung),
-// lam mo cac khoi khac, hien chi tiet o panel. Cuon chuot de zoom, keo de di chuyen.
+// lam mo cac khoi khac, hien chi tiet o panel. Cuon chuot de zoom, keo de di chuyen tu do (nhu cay).
+// Zoom xa (< FAR): moi khoi chi con ten, chu to - nhin tong the nhu ban do.
 
 import { $, esc, api, KIND_COLOR } from './util.js';
 import { t, tl } from './i18n.js';
 import { showHtml } from './panel.js';
 
-const A = $('#arch'), SCROLL = $('#arch-scroll'), SIZER = $('#arch-sizer'), CANVAS = $('#arch-canvas');
+const A = $('#arch'), STAGE = $('#arch-scroll'), CANVAS = $('#arch-canvas');
 const Q = $('#arch-q'), STAT = $('#arch-stat'), ZOOM = $('#arch-zoom');
 const SHOW = 40;          // so component hien trong 1 khoi da mo (panel hien day du)
-const ZMIN = 0.15, ZMAX = 2.5;
+const ZMIN = 0.08, ZMAX = 2.5, FAR = 0.6;
 
 export const LAYER_COLOR = {
   app: '#58a6ff', lib: '#bc8cff', hal: '#e3b341', ext: '#56d4dd', kernel: '#ff7b72', board: '#7ee787', build: '#8b949e',
@@ -22,7 +23,8 @@ const ICON = {
 };
 const ICON_ORDER = Object.keys(ICON);
 
-let data = null, sel = null, loading = false, zoom = 1;
+let data = null, sel = null, loading = false;
+let view = { x: 0, y: 0, k: 1 }, animId = 0;
 let byId = new Map(), out = new Map(), inc = new Map();
 const hidden = new Set(), opened = new Set();
 
@@ -66,7 +68,8 @@ function boxHtml(b, q) {
     ? `<div class="abox-cs">${b.comps.slice(0, SHOW).map(chip).join('')}${
       b.total > SHOW ? `<span class="ac more">${t('more', { n: b.total - SHOW })}</span>` : ''}</div>`
     : summary(b);
-  return `<div class="abox${cls}" data-id="${esc(b.id)}" style="--lc:${LAYER_COLOR[b.layer]}">
+  const c = LAYER_COLOR[b.layer];
+  return `<div class="abox${cls}" data-id="${esc(b.id)}" style="--lc:${c};--lb:${c}4d;--lg:${c}66">
     <div class="abox-hd"><i class="car">${open ? '▾' : '▸'}</i><span class="dot" style="background:${color(b)}"></span>`
     + `<b title="${esc(b.repo || b.label)}">${esc(tl(b.label))}</b>${sub ? `<small title="${esc(b.repo)}">${esc(sub)}/</small>` : ''}</div>`
     + body + '</div>';
@@ -94,7 +97,8 @@ function render() {
   CANVAS.innerHTML = `<svg id="arch-links"></svg>` + (h || `<div class="muted arch-none">${t('noMatch')}</div>`);
   STAT.textContent = t('archStat', { b: nb, c: nc, r: data.repos, s: data.took });
   renderLayers();
-  layoutZoom();
+  CANVAS.style.width = Math.max(600, STAGE.clientWidth) + 'px';
+  applyView();
   requestAnimationFrame(drawLinks);
 }
 
@@ -116,7 +120,8 @@ function drawLinks() {
     const e = CANVAS.querySelector(`.abox[data-id="${CSS.escape(id)}"]`);
     if (!e) return null;
     const r = e.getBoundingClientRect();
-    return { x: (r.left - cr.left) / zoom, y: (r.top - cr.top) / zoom, w: r.width / zoom, h: r.height / zoom };
+    const k = view.k;
+    return { x: (r.left - cr.left) / k, y: (r.top - cr.top) / k, w: r.width / k, h: r.height / k };
   };
   let h = `<defs>${['out', 'in'].map(k => `<marker id="ah-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7"
     markerHeight="7" orient="auto-start-reverse"><path d="M0,0L10,5L0,10z" class="ah ${k}"/></marker>`).join('')}</defs>`;
@@ -151,53 +156,74 @@ function drawLinks() {
 
 // ---------------------------------------------------------------- zoom / keo
 
-// canvas giu be rong bang khung nhin (o zoom 100%), chi phong to / thu nho bang transform;
-// SIZER co kich thuoc that sau khi zoom de thanh cuon dung
-function layoutZoom() {
-  CANVAS.style.width = Math.max(600, SCROLL.clientWidth) + 'px';
-  CANVAS.style.transform = `scale(${zoom})`;
-  SIZER.style.width = CANVAS.offsetWidth * zoom + 'px';
-  SIZER.style.height = CANVAS.offsetHeight * zoom + 'px';
-  ZOOM.textContent = Math.round(zoom * 100) + '%';
+// canvas giu be rong bang khung nhin, dat tu do bang transform (keo / zoom khong bi gioi han nhu thanh cuon)
+function applyView() {
+  CANVAS.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.k})`;
+  const far = view.k < FAR;
+  if (far !== CANVAS.classList.contains('far')) {          // doi muc chi tiet: khoi doi kich thuoc, ve lai duong noi
+    CANVAS.classList.toggle('far', far);
+    requestAnimationFrame(drawLinks);
+  }
+  ZOOM.textContent = Math.round(view.k * 100) + '%';
 }
 
-function zoomAt(k, cx = SCROLL.clientWidth / 2, cy = SCROLL.clientHeight / 2) {
-  const x = (SCROLL.scrollLeft + cx) / zoom, y = (SCROLL.scrollTop + cy) / zoom;
-  zoom = Math.max(ZMIN, Math.min(ZMAX, k));
-  layoutZoom();
-  SCROLL.scrollLeft = x * zoom - cx;
-  SCROLL.scrollTop = y * zoom - cy;
+function panTo(x, y, k = view.k) {
+  const s = { ...view }, t0 = performance.now(), id = ++animId;
+  (function step(now) {
+    if (id !== animId) return;
+    let p = Math.min(1, (now - t0) / 350);
+    p = 1 - Math.pow(1 - p, 3);
+    view = { x: s.x + (x - s.x) * p, y: s.y + (y - s.y) * p, k: s.k + (k - s.k) * p };
+    applyView();
+    if (p < 1) requestAnimationFrame(step);
+  })(t0);
+}
+
+function zoomAt(k, mx = STAGE.clientWidth / 2, my = STAGE.clientHeight / 2) {
+  animId++;
+  k = Math.max(ZMIN, Math.min(ZMAX, k));
+  view = { x: mx - (mx - view.x) * k / view.k, y: my - (my - view.y) * k / view.k, k };
+  applyView();
 }
 
 function fit() {
-  CANVAS.style.width = Math.max(600, SCROLL.clientWidth) + 'px';
-  zoom = Math.max(ZMIN, Math.min(1, (SCROLL.clientWidth - 4) / CANVAS.offsetWidth, (SCROLL.clientHeight - 4) / CANVAS.offsetHeight));
-  layoutZoom();
-  SCROLL.scrollLeft = SCROLL.scrollTop = 0;
+  const W = STAGE.clientWidth, H = STAGE.clientHeight, w = CANVAS.offsetWidth, h = CANVAS.offsetHeight;
+  const k = Math.max(ZMIN, Math.min(1, (W - 30) / w, (H - 30) / h));
+  panTo((W - w * k) / 2, Math.max(10, (H - h * k) / 2), k);
+}
+
+// dua khoi vao giua khung nhin
+function centerOn(id) {
+  const e = CANVAS.querySelector(`.abox[data-id="${CSS.escape(id)}"]`);
+  if (!e) return;
+  const r = e.getBoundingClientRect(), sr = STAGE.getBoundingClientRect();
+  const cx = r.left + r.width / 2 - sr.left, cy = r.top + r.height / 2 - sr.top;
+  if (cx > 60 && cx < sr.width - 60 && cy > 60 && cy < sr.height - 60) return;
+  panTo(view.x + sr.width / 2 - cx, view.y + sr.height / 2 - cy);
 }
 
 let drag = null, moved = false;
 
 function bindPan() {
-  SCROLL.addEventListener('wheel', e => {
+  STAGE.addEventListener('wheel', e => {
     e.preventDefault();
-    const r = SCROLL.getBoundingClientRect();
-    zoomAt(zoom * Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top);
+    const r = STAGE.getBoundingClientRect();
+    zoomAt(view.k * Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top);
   }, { passive: false });
-  SCROLL.addEventListener('pointerdown', e => {
+  STAGE.addEventListener('pointerdown', e => {
     if (e.button !== 0) return;
-    drag = { x: e.clientX, y: e.clientY, sl: SCROLL.scrollLeft, st: SCROLL.scrollTop };
+    drag = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
     moved = false;
   });
   addEventListener('pointermove', e => {
     if (!drag) return;
     const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    if (!moved && Math.abs(dx) + Math.abs(dy) > 4) { moved = true; SCROLL.classList.add('panning'); }
-    if (moved) { SCROLL.scrollLeft = drag.sl - dx; SCROLL.scrollTop = drag.st - dy; }
+    if (!moved && Math.abs(dx) + Math.abs(dy) > 4) { moved = true; animId++; STAGE.classList.add('panning'); }
+    if (moved) { view.x = drag.vx + dx; view.y = drag.vy + dy; applyView(); }
   });
   addEventListener('pointerup', () => {
     drag = null;
-    SCROLL.classList.remove('panning');
+    STAGE.classList.remove('panning');
     setTimeout(() => (moved = false), 0);
   });
 }
@@ -245,10 +271,7 @@ function select(id, scroll = false) {
   if (sel) opened.add(sel);
   render();
   showInfo();
-  if (scroll && sel) {
-    requestAnimationFrame(() => CANVAS.querySelector(`.abox[data-id="${CSS.escape(sel)}"]`)
-      ?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' }));
-  }
+  if (scroll && sel) requestAnimationFrame(() => centerOn(sel));
 }
 
 // bam khoi: dang dong -> mo + chon; dang mo ma chua chon -> chon; dang chon -> dong + bo chon
@@ -316,5 +339,5 @@ export function initArch() {
   $('#arch-close').addEventListener('click', () => { opened.clear(); sel = null; render(); showInfo(); });
   Q.addEventListener('input', render);
   $('#arch-rescan').addEventListener('click', () => load(true));
-  addEventListener('resize', () => { if (!A.hidden && data) { layoutZoom(); drawLinks(); } });
+  addEventListener('resize', () => { if (!A.hidden && data) render(); });
 }
