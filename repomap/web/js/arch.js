@@ -11,7 +11,7 @@ import { showHtml } from './panel.js';
 const A = $('#arch'), STAGE = $('#arch-scroll'), CANVAS = $('#arch-canvas');
 const Q = $('#arch-q'), STAT = $('#arch-stat'), ZOOM = $('#arch-zoom');
 const SHOW = 40;          // so component hien trong 1 khoi da mo (panel hien day du)
-const PAGE = 60;          // so khoi hien moi tang, bam "+60 nua" / "Hien tat ca" de xem them
+const PAGE = 100;         // so khoi hien moi tang, bam "+100 nua" / "Hien tat ca" de xem them
 const ZMIN = 0.08, ZMAX = 2.5, FAR = 0.6;
 
 export const LAYER_COLOR = {
@@ -107,9 +107,9 @@ function render() {
       vis.push(byId.get(sel));                         // khoi dang chon luon hien, du nam ngoai trang
     }
     h += `<section class="band" style="--lc:${c};border-color:${c}55;background:${c}0d">
-      <div class="band-hd"><b>${esc(layerName(L.id))}</b><small>${t('archCount', { b: boxes.length, c: comps })}</small></div>
-      <div class="band-body">${vis.map(b => boxHtml(b, q)).join('')}${
-        boxes.length > lim ? moreBtn(L.id, boxes.length - lim) : ''}</div></section>`;
+      <div class="band-hd"><b>${esc(layerName(L.id))}</b><small>${t('archCount', { b: boxes.length, c: comps })}</small>${
+        boxes.length > lim ? moreBtn(L.id, boxes.length - lim) : ''}</div>
+      <div class="band-body">${vis.map(b => boxHtml(b, q)).join('')}</div></section>`;
   }
   CANVAS.innerHTML = `<svg id="arch-links"></svg>` + (h || `<div class="muted arch-none">${t('noMatch')}</div>`);
   const errs = data.errors || [];
@@ -118,7 +118,7 @@ function render() {
   STAT.title = errs.map(e => `${e.repo}: ${e.error}`).join('\n');
   STAT.classList.toggle('err', errs.length > 0);
   renderLayers();
-  CANVAS.style.width = Math.max(600, STAGE.clientWidth) + 'px';
+  setWidth();
   applyView();
   requestAnimationFrame(drawLinks);
 }
@@ -178,11 +178,18 @@ function drawLinks() {
 // ---------------------------------------------------------------- zoom / keo
 
 // canvas giu be rong bang khung nhin, dat tu do bang transform (keo / zoom khong bi gioi han nhu thanh cuon)
+// be rong canvas = khung nhin; zoom xa (chu to) thi dan rong gap 1/FAR de van lap day man hinh, khong thanh cot hep
+function setWidth() {
+  const w = Math.max(600, STAGE.clientWidth);
+  CANVAS.style.width = (CANVAS.classList.contains('far') ? w / FAR : w) + 'px';
+}
+
 function applyView() {
   CANVAS.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.k})`;
   const far = view.k < FAR;
   if (far !== CANVAS.classList.contains('far')) {          // doi muc chi tiet: khoi doi kich thuoc, ve lai duong noi
     CANVAS.classList.toggle('far', far);
+    setWidth();
     requestAnimationFrame(drawLinks);
   }
   ZOOM.textContent = Math.round(view.k * 100) + '%';
