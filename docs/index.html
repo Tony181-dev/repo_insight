@@ -277,6 +277,7 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
       <li><code>~/your_workspace_root</code>: thư mục gốc bạn đã chạy <code>repo init</code> và <code>repo sync</code>, bên trong có thư mục <code>.repo/</code>. Ví dụ <code>~/projects/android13</code>.</li>
       <li><code>your_build_server</code>: tên hoặc địa chỉ IP của máy build bạn ssh vào.</li>
       <li><code>user</code>: tài khoản ssh của bạn trên máy build.</li>
+      <li><code>your_repo_url</code>: địa chỉ git của repo chứa tool này.</li>
     </ul>
     <p>Tuỳ source nằm ở đâu, chọn một trong hai cách.</p>
   </div>
@@ -294,7 +295,7 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
       </svg>
       <div class="cmd"><pre>python3 -m repomap ~/your_workspace_root</pre></div>
       <p>Trình duyệt tự mở tại <code>http://127.0.0.1:8800</code>. Không cần ssh.</p>
-      <p class="sub">Lấy tool bằng <code>git clone https://github.com/Tony181-dev/repo_insight.git</code> rồi chạy lệnh trên trong thư mục đó, hoặc dùng file <code>repomap.pyz</code> đã đóng gói như ở cách 2.</p>
+      <p class="sub">Lấy tool bằng <code>git clone your_repo_url</code> rồi chạy lệnh trên trong thư mục đó, hoặc dùng file <code>repomap.pyz</code> đã đóng gói như ở cách 2.</p>
     </div>
     <div>
       <h3 id="xa">Cách 2: source nằm trên máy build ở xa, bạn ssh vào</h3>
@@ -334,7 +335,7 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
       <p>Bạn đóng gói tool một lần trên PC Windows thành một file <code>repomap.pyz</code> khoảng 35 KB, rồi copy file đó lên máy build. Máy build chỉ cần có python3, không cần git clone, không cần pip, không cần mạng.</p>
       <ol class="steps">
         <li>Cài Python 3.8 trở lên trên Windows từ <a href="https://www.python.org/downloads/">python.org</a>. Python này chỉ dùng để đóng gói.</li>
-        <li>Lấy mã nguồn: <code>git clone https://github.com/Tony181-dev/repo_insight.git</code>, hoặc tải file zip từ GitHub rồi giải nén.</li>
+        <li>Lấy mã nguồn: <code>git clone your_repo_url</code>, hoặc tải file zip của repo rồi giải nén.</li>
         <li>Bấm đúp <code>build.bat</code>, hoặc chạy trong cmd:
           <div class="cmd"><pre>build.bat           <span class="c">rem chạy unit test rồi đóng gói</span>
 build.bat notest    <span class="c">rem bỏ qua unit test</span></pre></div>
@@ -460,7 +461,6 @@ workers = 0          <span class="c"># 0: tự chọn theo số CPU</span></pre>
 
 <footer>
   <span>repomap 1.0.0</span>
-  <a href="https://github.com/Tony181-dev/repo_insight">Mã nguồn trên GitHub</a>
 </footer>
 </div>
 
