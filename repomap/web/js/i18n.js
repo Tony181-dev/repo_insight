@@ -42,6 +42,7 @@ const DICT = {
       'dashed yellow = who uses it); click it again to close<br>' +
       '• Scroll to zoom, drag to move; click the layer chips to hide or show a layer',
     expandAll: 'Expand all', collapseAll: 'Collapse all', zoomReset: 'Back to 100%',
+    archErrors: '{n} repos skipped (error, hover for details)',
     follow: 'Auto-center', followTitle: 'On: clicking a block glides it to the middle of the view',
     components: 'Components', uses: 'Uses', usedBy: 'Used by', builds: 'builds', showInTree: 'Show in tree',
     svcUnits: 'started by',
@@ -95,6 +96,7 @@ const DICT = {
       'vàng nét đứt = ai dùng nó); bấm lần nữa để đóng<br>' +
       '• Cuộn chuột để zoom, kéo để di chuyển; bấm các nút tầng để ẩn/hiện tầng',
     expandAll: 'Mở hết', collapseAll: 'Thu hết', zoomReset: 'Về 100%',
+    archErrors: '{n} repo bị bỏ qua do lỗi (rê chuột để xem)',
     follow: 'Tự căn giữa', followTitle: 'Bật: bấm vào khối thì view tự trượt để khối nằm giữa màn hình',
     components: 'Component', uses: 'Dùng', usedBy: 'Được dùng bởi', builds: 'build', showInTree: 'Xem trên cây',
     svcUnits: 'khởi chạy bởi',

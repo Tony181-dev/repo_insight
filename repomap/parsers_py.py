@@ -57,7 +57,7 @@ def _toml_value(raw):
     raw = raw.strip()
     if raw.startswith('['):
         return [a or b for a, b in re.findall(r'"([^"]*)"|\'([^\']*)\'', raw)]
-    if raw[:1] in '"\'':
+    if raw and raw[0] in '"\'':                        # ('' in '...' la True: dong 'key =' khong co gia tri)
         q = raw[0] * 3 if raw.startswith(raw[0] * 3) else raw[0]
         end = raw.find(q, len(q))
         return raw[len(q):end] if end > 0 else raw.strip(q)

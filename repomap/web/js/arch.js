@@ -98,7 +98,11 @@ function render() {
       <div class="band-body">${boxes.map(b => boxHtml(b, q)).join('')}</div></section>`;
   }
   CANVAS.innerHTML = `<svg id="arch-links"></svg>` + (h || `<div class="muted arch-none">${t('noMatch')}</div>`);
-  STAT.textContent = t('archStat', { b: nb, c: nc, r: data.repos, s: data.took });
+  const errs = data.errors || [];
+  STAT.textContent = t('archStat', { b: nb, c: nc, r: data.repos, s: data.took })
+    + (errs.length ? ' · ' + t('archErrors', { n: errs.length }) : '');
+  STAT.title = errs.map(e => `${e.repo}: ${e.error}`).join('\n');
+  STAT.classList.toggle('err', errs.length > 0);
   renderLayers();
   CANVAS.style.width = Math.max(600, STAGE.clientWidth) + 'px';
   applyView();

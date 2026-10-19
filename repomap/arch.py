@@ -11,7 +11,9 @@ Ket qua: {'layers': [{id, label}],
 import json
 import os
 import re
+import sys
 import time
+import traceback
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
@@ -679,11 +681,23 @@ def _ext_name(eco, d):
     return d
 
 
+def _scan_safe(ws, p, refresh, errors):
+    """1 repo loi (file la, parser vap truong hop chua gap) khong duoc lam hong ca block view:
+    bo qua repo do, in traceback ra terminal, bao so repo loi ve giao dien."""
+    try:
+        return scan_repo(ws, p, refresh)
+    except Exception as e:  # noqa: BLE001
+        print('  ! block view: %s: %s' % (p['path'], traceback.format_exc()), file=sys.stderr)
+        errors.append({'repo': p['path'], 'error': '%s: %s' % (type(e).__name__, e)})
+        return _Repo(ws, p)
+
+
 def build_arch(ws, refresh=False):
     """refresh=True: doc lai danh sach file cua moi repo (nut Rescan)."""
     t0 = time.time()
+    errors = []
     with ThreadPoolExecutor(max(1, ws.workers)) as ex:
-        results = list(ex.map(lambda p: scan_repo(ws, p, refresh), ws.repos))
+        results = list(ex.map(lambda p: _scan_safe(ws, p, refresh, errors), ws.repos))
 
     comps, svcs = [], []
     for R in results:
@@ -772,4 +786,5 @@ def build_arch(ws, refresh=False):
     return {'layers': [{'id': k, 'label': v} for k, v in LAYERS],
             'boxes': sorted(boxes.values(), key=lambda b: (order[b['layer']], b['repo'], b['label'])),
             'edges': [[a, b, n, k] for (a, b, k), n in sorted(edges.items())],
-            'repos': len(ws.repos), 'comps': len(comps), 'took': round(time.time() - t0, 2)}
+            'repos': len(ws.repos), 'comps': len(comps), 'took': round(time.time() - t0, 2),
+            'errors': sorted(errors, key=lambda e: e['repo'])}

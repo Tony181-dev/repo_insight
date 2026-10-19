@@ -24,6 +24,7 @@ from repomap.deepscan import deep_scan  # noqa: E402
 from repomap.fileview import file_lines, file_view, ver_match  # noqa: E402
 from repomap.insight import insight  # noqa: E402
 from repomap.parsers import bp_modules, parse_file, parse_vars  # noqa: E402
+from repomap.parsers_py import read_toml  # noqa: E402
 from repomap.server import start_server  # noqa: E402
 from repomap.source import list_dir, search  # noqa: E402
 from repomap.workspace import Workspace  # noqa: E402
@@ -218,6 +219,11 @@ class WorkspaceTest(unittest.TestCase):
         self.assertIn(('apps/venc#app', 'apps/venc#lib', 'use'), edges)
         self.assertIn(('device/acme/board#app', 'device/acme/board#lib', 'use'), edges)
         self.assertIn(('layers/meta-acme#build', 'src/foo-app#app', 'build'), edges)   # SRC_URI -> repo
+        self.assertEqual(a['errors'], [])
+
+    def test_toml_empty_value(self):
+        """Dong 'key =' khong co gia tri (template, file dang sua do) tung lam IndexError ca block view."""
+        self.assertEqual(read_toml('[package]\nname = "x"\nversion =\n')['package'], {'name': 'x', 'version': ''})
 
     def test_file_view_errors(self):
         self.assertIn('error', file_view(self.ws, 'kernel/linux', 'nope.c'))
