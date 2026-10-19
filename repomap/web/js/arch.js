@@ -25,6 +25,9 @@ const ICON_ORDER = Object.keys(ICON);
 
 let data = null, sel = null, loading = false;
 let view = { x: 0, y: 0, k: 1 }, animId = 0;
+const FOLLOW_KEY = 'repomap-arch-follow';
+let follow = true;                       // bam khoi -> truot khoi vao giua khung nhin
+try { follow = localStorage.getItem(FOLLOW_KEY) !== '0'; } catch (e) { /* storage bi chan */ }
 let byId = new Map(), out = new Map(), inc = new Map();
 const hidden = new Set(), opened = new Set();
 
@@ -192,13 +195,13 @@ function fit() {
   panTo((W - w * k) / 2, Math.max(10, (H - h * k) / 2), k);
 }
 
-// dua khoi vao giua khung nhin
-function centerOn(id) {
+// dua khoi vao giua khung nhin; soft: chi truot khi khoi dang nam ngoai man hinh
+function centerOn(id, soft = false) {
   const e = CANVAS.querySelector(`.abox[data-id="${CSS.escape(id)}"]`);
   if (!e) return;
   const r = e.getBoundingClientRect(), sr = STAGE.getBoundingClientRect();
   const cx = r.left + r.width / 2 - sr.left, cy = r.top + r.height / 2 - sr.top;
-  if (cx > 60 && cx < sr.width - 60 && cy > 60 && cy < sr.height - 60) return;
+  if (soft && cx > 60 && cx < sr.width - 60 && cy > 60 && cy < sr.height - 60) return;
   panTo(view.x + sr.width / 2 - cx, view.y + sr.height / 2 - cy);
 }
 
@@ -265,13 +268,21 @@ function showInfo() {
   showHtml(b ? panelHtml(b) : `<div class="muted">${t('archHelp')}</div>`);
 }
 
-// chon khoi (mo ra luon); scroll: dua khoi vao giua khung nhin
+// chon khoi (mo ra luon). Bat "tu can giua": luon truot khoi vao giua; tat: chi khi chon tu panel / tim kiem
+// (scroll=true) ma khoi dang nam ngoai man hinh
 function select(id, scroll = false) {
   sel = id && byId.has(id) ? id : null;
   if (sel) opened.add(sel);
   render();
   showInfo();
-  if (scroll && sel) requestAnimationFrame(() => centerOn(sel));
+  if (sel && (follow || scroll)) requestAnimationFrame(() => centerOn(sel, !follow));
+}
+
+function setFollow(on) {
+  follow = on;
+  $('#arch-follow').setAttribute('aria-pressed', String(on));
+  try { localStorage.setItem(FOLLOW_KEY, on ? '1' : '0'); } catch (e) { /* storage bi chan */ }
+  if (on && sel) centerOn(sel);
 }
 
 // bam khoi: dang dong -> mo + chon; dang mo ma chua chon -> chon; dang chon -> dong + bo chon
@@ -335,6 +346,8 @@ export function initArch() {
   });
   $('#arch-fit').addEventListener('click', () => { fit(); drawLinks(); });
   ZOOM.addEventListener('click', () => zoomAt(1));
+  $('#arch-follow').addEventListener('click', () => setFollow(!follow));
+  setFollow(follow);
   $('#arch-open').addEventListener('click', () => { data?.boxes.forEach(b => opened.add(b.id)); render(); });
   $('#arch-close').addEventListener('click', () => { opened.clear(); sel = null; render(); showInfo(); });
   Q.addEventListener('input', render);
