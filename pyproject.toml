@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "repomap"
+dynamic = ["version"]
+description = "Ban do workspace repo sync (Yocto/BitBake, Android, QNX, Linux) - giao dien web, nap theo tang"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = []
+
+[project.scripts]
+repomap = "repomap.cli:main"
+
+[tool.setuptools]
+packages = ["repomap"]
+
+[tool.setuptools.dynamic]
+version = { attr = "repomap.__version__" }
+
+[tool.setuptools.package-data]
+repomap = ["web/*.html", "web/*.css", "web/js/*.js"]

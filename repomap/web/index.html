@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>repomap</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="top">
+    <div class="logo"><i>&#9670;</i> repomap</div>
+    <div id="rootp"></div>
+    <div id="stat"></div>
+    <div id="sbox">
+      <input id="q" placeholder="Tìm repo…  (/)   vd: kernel · kind:qnx · kind:yocto-layer" autocomplete="off">
+      <div id="res"></div>
+    </div>
+    <button id="b-panel" title="Ẩn/hiện panel">&#9776;</button>
+  </header>
+
+  <main id="main">
+    <section id="stage">
+      <div id="tools">
+        <button id="b-fit">Vừa khung</button>
+        <button id="b-more">Mở thêm 1 tầng</button>
+        <button id="b-collapse">Thu gọn</button>
+      </div>
+      <svg id="svg"><g id="vp"><g id="gl"></g><g id="gn"></g></g></svg>
+      <div id="legend"></div>
+      <div class="empty" id="empty">Đang đọc manifest…</div>
+    </section>
+
+    <aside id="panel">
+      <div class="muted">
+        Bấm vào một repo trên cây để xem insight.<br><br>
+        • Bấm repo → thông tin nhanh + file chính<br>
+        • <b>Quét sâu</b> → toàn bộ file build/config, recipe, module<br>
+        • Bấm file → biến, include/require/inherit đã resolve, bấm tiếp để đi sâu<br><br>
+        Kéo để di chuyển, cuộn để zoom, <b>/</b> để tìm.
+      </div>
+    </aside>
+  </main>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
