@@ -28,6 +28,23 @@ async function load(dir) {
   return listing.get(dir);
 }
 
+// loai file -> lop mau cua bieu tuong trong cay (mau dinh nghia o style.css: .ft-*)
+const FILE_TYPES = [
+  ['c', /\.(c|cc|cpp|cxx|s|S|asm)$/],
+  ['h', /\.(h|hh|hpp|hxx|inl|ipp)$/],
+  ['py', /\.(py|pyi)$|^(requirements|constraints)[\w.-]*\.(txt|in)$|^Pipfile/],
+  ['bb', /\.(bb|bbappend|bbclass|inc)$/],
+  ['dt', /\.(dts|dtsi|dtso)$/],
+  ['and', /\.(bp|aidl|hal|rc|te)$|^Android\.mk$/],
+  ['build', /^(Makefile.*|makefile|GNUmakefile|Kbuild|Kconfig.*|CMakeLists\.txt|meson\.build|configure\.ac|.*\.(mk|mak|cmake|sh|bash|build|use))$/],
+  ['ops', /^(Dockerfile.*|Jenkinsfile.*|.*\.(tf|tfvars|hcl|groovy|dockerfile))$|^\.gitlab-ci\.yml$|^(docker-)?compose[\w.-]*\.ya?ml$/],
+  ['cfg', /\.(conf|cfg|ini|toml|json|ya?ml|xml|properties|config)$|defconfig$|^\.config$/],
+  ['doc', /\.(md|rst|txt|adoc|html?)$|^(README|LICENSE|COPYING|NOTICE|AUTHORS|CHANGELOG)/i],
+  ['code', /\.(java|kt|go|rs|js|ts|mjs|cs|swift|rb|pl|lua)$/],
+  ['bin', /\.(png|jpe?g|gif|ico|svg|bmp|bin|img|so|a|o|ko|zip|gz|xz|bz2|tar|tgz|pdf|jar|apk|ttf|woff2?)$/i],
+];
+const fileType = name => (FILE_TYPES.find(([, re]) => re.test(name)) || ['other'])[0];
+
 function treeHtml(dir, depth) {
   const d = listing.get(dir);
   if (!d) return '';
@@ -36,13 +53,16 @@ function treeHtml(dir, depth) {
   let h = '';
   for (const x of d.dirs) {
     const p = join(dir, x.name), open = expanded.has(p);
-    h += `<button class="tn dir${open ? ' open' : ''}" style="--d:${depth}" data-d="${esc(p)}" aria-expanded="${open}">`
-      + `<i>${open ? '▾' : '▸'}</i>${esc(x.name)}${x.repo ? `<span class="nr">repo</span>` : ''}</button>`;
+    const repoColor = x.repo && store.byRepo[x.repo] ? `;--fold:${colorOf(store.byRepo[x.repo])}` : '';
+    h += `<button class="tn dir${open ? ' open' : ''}${x.repo ? ' nested' : ''}" style="--d:${depth}${repoColor}" `
+      + `data-d="${esc(p)}" aria-expanded="${open}"><i>${open ? '▾' : '▸'}</i><span class="ic"></span>${esc(x.name)}`
+      + `${x.repo ? '<span class="nr">repo</span>' : ''}</button>`;
     if (open) h += treeHtml(p, depth + 1);
   }
   for (const x of d.files) {
     const p = join(dir, x.name);
-    h += `<button class="tn file${cur && cur.f === p ? ' sel' : ''}" style="--d:${depth}" data-f="${esc(p)}"><i></i>${esc(x.name)}</button>`;
+    h += `<button class="tn file ft-${fileType(x.name)}${cur && cur.f === p ? ' sel' : ''}" style="--d:${depth}" `
+      + `data-f="${esc(p)}"><i></i><span class="ic"></span>${esc(x.name)}</button>`;
   }
   return h;
 }
@@ -91,7 +111,8 @@ function renderResults() {
     if (!r.results.length) h += `<div class="tn muted">${t('noResults')}</div>`;
     for (const x of r.results) {
       const rel = mod.base ? x.f.slice(mod.base.length + 1) : x.f;
-      h += `<button class="tn hit" data-f="${esc(x.f)}" data-n="${x.n || 0}"><b>${esc(tail(rel, 1))}</b>`
+      h += `<button class="tn hit file ft-${fileType(tail(x.f, 1))}" data-f="${esc(x.f)}" data-n="${x.n || 0}">`
+        + `<b><span class="ic"></span>${esc(tail(rel, 1))}</b>`
         + `<small>${esc(rel)}${x.n ? ':' + x.n : ''}</small>${x.text ? `<code>${esc(x.text)}</code>` : ''}</button>`;
     }
   }

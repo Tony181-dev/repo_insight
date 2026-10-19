@@ -140,16 +140,45 @@ input.flt { width: 100%; background: var(--bg); color: var(--fg); border: 1px so
 .src-body { flex: 1; display: flex; min-height: 0; }
 #src-tree { width: 330px; flex: none; overflow: auto; border-right: 1px solid var(--line); background: var(--bg2);
   padding: 6px 0 30px; }
-.tn { display: flex; align-items: baseline; gap: 6px; width: 100%; text-align: left; background: none; border: 0;
-  border-radius: 0; padding: 3px 10px 3px calc(10px + var(--d, 0) * 14px); font: 12.5px var(--mono); color: var(--fg);
-  cursor: pointer; white-space: nowrap; }
-.tn:hover { background: var(--bg3); }
-.tn i { font-style: normal; color: var(--mute); width: 10px; flex: none; }
-.tn.dir { color: #c9d1d9; }
-.tn.sel { background: #1f3a5f; color: #fff; }
+.tn { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; border: 0; border-radius: 0;
+  padding: 3px 10px 3px calc(10px + var(--d, 0) * 14px); font: 12.5px var(--mono); color: #c9d1d9; cursor: pointer;
+  white-space: nowrap;
+  /* duong ke doc cho moi cap long nhau */
+  background: repeating-linear-gradient(to right, #262d36 0 1px, transparent 1px 14px) 14px 0 / calc(var(--d, 0) * 14px) 100% no-repeat; }
+.tn:hover { background-color: var(--bg3); }
+.tn i { font-style: normal; color: #6e7681; width: 10px; flex: none; font-size: 11px; }
+.tn .ic { flex: none; position: relative; }
 .tn.muted { cursor: default; color: var(--mute); }
-.tn .nr { font: 10px var(--mono); padding: 0 5px; border-radius: 4px; border: 1px solid var(--line); color: var(--mute); }
+.tn.sel { background-color: #1f3a5f; color: #fff; box-shadow: inset 2px 0 0 var(--acc); }
+.tn .nr { font: 10px var(--mono); padding: 0 5px; border-radius: 4px; border: 1px solid var(--fold, var(--line));
+  color: var(--fold, var(--mute)); }
+
+/* thu muc: bieu tuong folder co tai; repo long ben trong dung mau loai repo */
+.tn.dir { color: #e6edf3; font-weight: 500; }
+.tn.dir .ic { width: 13px; height: 9px; margin-top: 2px; border-radius: 1px 2px 2px 2px; background: var(--fold, #d9a441); }
+.tn.dir .ic::before { content: ''; position: absolute; left: 0; top: -3px; width: 6px; height: 3px;
+  border-radius: 2px 2px 0 0; background: inherit; }
+.tn.dir.open .ic { background: transparent; box-shadow: inset 0 0 0 1.5px var(--fold, #d9a441); }
+.tn.dir.open .ic::before { background: var(--fold, #d9a441); }
+
+/* file: o mau theo loai */
+.tn.file .ic { width: 8px; height: 10px; border-radius: 2px; background: var(--ft, #6e7681); }
+.tn.file .ic::after { content: ''; position: absolute; right: 0; top: 0; border: 2px solid; border-color: var(--bg2) var(--bg2) transparent transparent; }
+.ft-c { --ft: #4c8dff; }
+.ft-h { --ft: #a5b8ff; }
+.ft-py { --ft: #f2cc4b; }
+.ft-bb { --ft: #f0a530; }
+.ft-dt { --ft: #c792ea; }
+.ft-and { --ft: #9ad94a; }
+.ft-build { --ft: #3fb950; }
+.ft-ops { --ft: #e879f9; }
+.ft-cfg { --ft: #ff9e64; }
+.ft-doc { --ft: #8b949e; }
+.ft-code { --ft: #2dd4bf; }
+.ft-bin { --ft: #3d444d; }
+.tn.ft-bin { color: #7d8590; }
 .tn.hit { flex-direction: column; align-items: flex-start; gap: 1px; padding: 5px 12px; white-space: normal; }
+.tn.hit .ic { display: inline-block; margin-right: 7px; vertical-align: -1px; }
 .tn.hit small { color: var(--mute); word-break: break-all; }
 .tn.hit code { color: #c9d1d9; font-size: 11.5px; white-space: pre-wrap; word-break: break-all; }
 .src-res-head { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px 8px;
