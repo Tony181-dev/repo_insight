@@ -32,6 +32,26 @@ const DICT = {
     searchText: 'Search in files (Enter)…', results: '{n} results', resultsMore: '(first ones only)',
     noResults: 'No results', searching: 'Searching…', clear: 'Clear', emptyDir: 'Empty folder',
     pickFile: 'Pick a file on the left.', outline: 'Outline',
+    viewTitle: 'Switch view', viewTree: 'Tree', viewBlocks: 'Blocks',
+    archFilter: 'Filter repo or component…', archLoading: 'Detecting components in every repo…',
+    archStat: '{b} blocks, {c} components, {r} repos, {s}s', archCount: '{b} blocks · {c} components',
+    archHelp: 'Architecture of the whole workspace, detected from build and service files.<br><br>' +
+      '• Each band is a layer: applications/services, libraries, platform/HAL, external libraries, kernel/drivers, ' +
+      'board/BSP, build/tooling<br>• Each block is one repo in that layer, with the components found in it<br>' +
+      '• Click a block: green lines = what it uses, dashed yellow = who uses it<br>' +
+      '• Click the layer chips to hide or show a layer',
+    components: 'Components', uses: 'Uses', usedBy: 'Used by', builds: 'builds', showInTree: 'Show in tree',
+    svcUnits: 'started by',
+    layer_app: 'Applications & services', layer_lib: 'Libraries & frameworks',
+    layer_hal: 'Platform / HAL / user-space drivers', layer_ext: 'System & third-party libraries',
+    layer_kernel: 'Kernel & drivers', layer_board: 'Board / BSP / boot', layer_build: 'Build, CI & tooling',
+    layerShort_app: 'App', layerShort_lib: 'Lib', layerShort_hal: 'HAL', layerShort_ext: 'External',
+    layerShort_kernel: 'Kernel', layerShort_board: 'Board', layerShort_build: 'Build',
+    type_exe: 'executable', type_svc: 'service', type_container: 'container', type_lib: 'library',
+    type_iface: 'interface', type_kmod: 'kernel module', type_driver: 'driver', type_kernel: 'kernel',
+    type_boot: 'bootloader', type_dt: 'device tree', type_machine: 'machine', type_board: 'board config',
+    type_image: 'image', type_recipe: 'recipe', type_layer: 'Yocto layer', type_ci: 'CI / image build',
+    type_infra: 'infrastructure', type_tool: 'tool', type_repo: 'repo', type_ext: 'external',
   },
   vi: {
     searchPh: 'Tìm repo (/), vd: kernel hoặc kind:qnx',
@@ -62,6 +82,26 @@ const DICT = {
     searchText: 'Tìm trong nội dung (Enter)…', results: '{n} kết quả', resultsMore: '(chỉ hiện phần đầu)',
     noResults: 'Không có kết quả', searching: 'Đang tìm…', clear: 'Xoá', emptyDir: 'Thư mục trống',
     pickFile: 'Chọn một file bên trái.', outline: 'Cấu trúc',
+    viewTitle: 'Đổi kiểu xem', viewTree: 'Cây', viewBlocks: 'Khối',
+    archFilter: 'Lọc repo hoặc component…', archLoading: 'Đang nhận diện component trong mọi repo…',
+    archStat: '{b} khối, {c} component, {r} repo, {s}s', archCount: '{b} khối · {c} component',
+    archHelp: 'Kiến trúc tổng của workspace, tự nhận diện từ file build và file service.<br><br>' +
+      '• Mỗi dải là một tầng: ứng dụng/service, thư viện, nền tảng/HAL, thư viện ngoài, kernel/driver, ' +
+      'board/BSP, build/công cụ<br>• Mỗi khối là một repo trong tầng đó, kèm các component tìm được<br>' +
+      '• Bấm vào khối: đường xanh = khối đó dùng gì, đường vàng nét đứt = ai dùng nó<br>' +
+      '• Bấm các nút tầng để ẩn/hiện tầng',
+    components: 'Component', uses: 'Dùng', usedBy: 'Được dùng bởi', builds: 'build', showInTree: 'Xem trên cây',
+    svcUnits: 'khởi chạy bởi',
+    layer_app: 'Ứng dụng & service', layer_lib: 'Thư viện & framework',
+    layer_hal: 'Nền tảng / HAL / driver user-space', layer_ext: 'Thư viện hệ thống & bên thứ ba',
+    layer_kernel: 'Kernel & driver', layer_board: 'Board / BSP / boot', layer_build: 'Build, CI & công cụ',
+    layerShort_app: 'App', layerShort_lib: 'Lib', layerShort_hal: 'HAL', layerShort_ext: 'Ngoài',
+    layerShort_kernel: 'Kernel', layerShort_board: 'Board', layerShort_build: 'Build',
+    type_exe: 'chương trình', type_svc: 'service', type_container: 'container', type_lib: 'thư viện',
+    type_iface: 'interface', type_kmod: 'kernel module', type_driver: 'driver', type_kernel: 'kernel',
+    type_boot: 'bootloader', type_dt: 'device tree', type_machine: 'machine', type_board: 'cấu hình board',
+    type_image: 'image', type_recipe: 'recipe', type_layer: 'Yocto layer', type_ci: 'CI / build image',
+    type_infra: 'hạ tầng', type_tool: 'công cụ', type_repo: 'repo', type_ext: 'bên ngoài',
   },
 };
 
@@ -69,6 +109,10 @@ const DICT = {
 const SERVER_VI = {
   'kind': 'loại', 'modified': 'file đang sửa', 'subject': 'nội dung commit', 'date': 'ngày', 'author': 'tác giả',
   'Other config': 'Config khác', '(root)': '(gốc)',
+  'C/C++ system libraries': 'Thư viện hệ thống C/C++',
+  'Android libraries (outside workspace)': 'Thư viện Android (ngoài workspace)',
+  'Python packages': 'Gói Python', 'npm packages': 'Gói npm', 'Rust crates': 'Crate Rust', 'Go modules': 'Module Go',
+  'Java / Maven libraries': 'Thư viện Java / Maven',
 };
 
 export const LANGS = ['en', 'vi'];

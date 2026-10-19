@@ -7,6 +7,7 @@ import { initGraph, render, refresh, centerOn, fit, resetView } from './graph.js
 import { showPanel, bindPanel, togglePanel } from './panel.js';
 import { t, applyStatic, setLang, onLangChange } from './i18n.js';
 import { initSource, openSource } from './source.js';
+import { initArch, showArch, hideArch, archRefresh, archFocusRepo } from './arch.js';
 
 // ---------------------------------------------------------------- chon / mo node
 
@@ -17,7 +18,28 @@ function select(n) {
   refresh(n);
 }
 
+// ---------------------------------------------------------------- kieu xem: cay (mac dinh) / khoi kien truc
+
+let view = 'tree';
+
+function setView(v) {
+  view = v;
+  document.querySelectorAll('[data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === v)));
+  $('#stage').classList.toggle('arch-mode', v === 'arch');
+  if (v === 'arch') showArch();
+  else {
+    hideArch();
+    if (store.sel) showPanel(store.sel);
+  }
+}
+
+$('#views').addEventListener('click', e => {
+  const b = e.target.closest('[data-view]');
+  if (b && b.dataset.view !== view) setView(b.dataset.view);
+});
+
 function reveal(n) {
+  if (view !== 'tree') setView('tree');
   for (let p = n.parent; p; p = p.parent) p.open = true;
   render();
   centerOn(n);
@@ -112,7 +134,8 @@ function pick(i) {
   if (!r) return;
   R.style.display = 'none';
   Q.blur();
-  reveal(store.byRepo[r.path]);
+  if (view === 'arch') archFocusRepo(r.path);
+  else reveal(store.byRepo[r.path]);
 }
 
 function moveHit(d) {
@@ -173,7 +196,8 @@ onLangChange(() => {
   status();
   if (!store.root) return;
   render();
-  if (store.sel) showPanel(store.sel, true);
+  if (view === 'arch') archRefresh();
+  else if (store.sel) showPanel(store.sel, true);
   if (R.style.display === 'block') search();
 });
 
@@ -200,5 +224,7 @@ onLangChange(() => {
   select(store.root);
   showPanel(store.root);
   initSource();
+  initArch();
+  setView('tree');
   if (history.state && history.state.src) openSource(history.state.src, { push: false });   // tai lai trang khi dang xem source
 })();

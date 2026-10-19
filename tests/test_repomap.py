@@ -19,6 +19,7 @@ from repomap.cli import apply_overrides, interactive, parse_args, resolve_settin
 from repomap.menu import run_menu  # noqa: E402
 from repomap.settings import (Settings, detect_ssh_port, load_settings, parse_sshd_ports,  # noqa: E402
                               save_settings, write_template)
+from repomap.arch import build_arch  # noqa: E402
 from repomap.deepscan import deep_scan  # noqa: E402
 from repomap.fileview import file_lines, file_view, ver_match  # noqa: E402
 from repomap.insight import insight  # noqa: E402
@@ -193,6 +194,31 @@ class WorkspaceTest(unittest.TestCase):
         self.assertEqual(file_lines(self.ws, 'src/foo-app', 'big.c', 12002, 1)['lines'], ['int tail;'])
         os.remove(path)
 
+    # ---- block view
+    def test_arch(self):
+        a = build_arch(self.ws)
+        box = {b['id']: b for b in a['boxes']}
+        names = lambda bid: {c['name'] for c in box[bid]['comps']}  # noqa: E731
+        self.assertEqual(names('apps/venc#app'), {'venc'})                   # venc_test bo qua
+        self.assertEqual(box['apps/venc#app']['comps'][0]['svc'], ['venc'])  # venc.service
+        self.assertIn('venc_core', names('apps/venc#lib'))
+        self.assertIn('libgk7205_backend', names('platform/hal/gk7205#hal'))  # thu muc hal/ -> tang HAL
+        self.assertEqual(names('drivers/rtl8812eu#kernel'), {'8812eu'})      # obj-m, bo qua TARGET
+        self.assertIn('spi-acme', names('qnx/drivers/spi#kernel'))
+        self.assertIn('Linux kernel', names('kernel/linux#kernel'))
+        self.assertEqual(names('device/acme/board#app'), {'acmed'})
+        self.assertIn('libacme', names('device/acme/board#lib'))
+        self.assertIn('acme-board', names('layers/meta-acme#board'))
+        self.assertTrue({'pyapp', 'web', 'db'} <= names('tools/extra#app'))
+        self.assertIn('GitLab CI', names('tools/extra#build'))
+        self.assertTrue({'libusb-1.0', 'libmpi'} <= names('ext#c'))
+        self.assertTrue({'liblog', 'libcutils'} <= names('ext#android'))
+        edges = {(x, y, k) for x, y, _, k in a['edges']}
+        self.assertIn(('apps/venc#app', 'platform/hal/gk7205#hal', 'use'), edges)
+        self.assertIn(('apps/venc#app', 'apps/venc#lib', 'use'), edges)
+        self.assertIn(('device/acme/board#app', 'device/acme/board#lib', 'use'), edges)
+        self.assertIn(('layers/meta-acme#build', 'src/foo-app#app', 'build'), edges)   # SRC_URI -> repo
+
     def test_file_view_errors(self):
         self.assertIn('error', file_view(self.ws, 'kernel/linux', 'nope.c'))
 
@@ -214,6 +240,9 @@ class WorkspaceTest(unittest.TestCase):
             self.assertIn(b'openSource', get('/js/source.js') + get('/js/i18n.js'))
             ins = json.loads(get('/api/insight?repo=kernel/linux'))
             self.assertTrue(ins['keys'])
+            arch = json.loads(get('/api/arch'))
+            self.assertTrue(arch['boxes'] and arch['edges'])
+            self.assertIn(b'archFocusRepo', get('/js/arch.js'))
             with self.assertRaises(Exception):
                 get('/../../etc/passwd')
         finally:

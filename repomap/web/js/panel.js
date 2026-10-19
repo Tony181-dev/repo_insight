@@ -152,6 +152,15 @@ export function goLine(ln) {
   code.goLine(ln);
 }
 
+// noi dung dung san (vd block view)
+export function showHtml(html) {
+  code?.destroy();
+  code = null;
+  P.classList.remove('hide');
+  P.innerHTML = html;
+  P.scrollTop = 0;
+}
+
 export const togglePanel = () => P.classList.toggle('hide');
 
 // actions: { deep(btn), open(item), repo(path), cat(id), src({repo, base, file}) }

@@ -7,6 +7,7 @@
   GET /api/lines?repo=PATH&f=REL&from=N&n=M -> doan dong tiep theo cua file dai
   GET /api/ls?repo=PATH&dir=REL        -> full source: noi dung 1 thu muc
   GET /api/search?repo=PATH&base=REL&q=TEXT&mode=name|text -> full source: tim file / tim noi dung
+  GET /api/arch[?force=1]              -> kien truc tong: component theo tang (block view)
 """
 import json
 import mimetypes
@@ -17,6 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from . import __version__
+from .arch import build_arch
 from .deepscan import deep_scan
 from .fileview import file_lines, file_view
 from .insight import insight
@@ -74,6 +76,8 @@ def make_handler(ws):
             if ep == 'tree':
                 return self._send({'root': ws.root, 'mode': ws.mode, 'took': round(ws.took, 2),
                                    'version': __version__, 'repos': ws.repos})
+            if ep == 'arch':
+                return self._send(ws.cached(('arch',), lambda: build_arch(ws, force), force))
             if repo not in ws.by_path and not (ep in ('file', 'lines', 'ls') and repo == ''):
                 return self._send({'error': 'no such repo: ' + repo}, code=404)
             if ep == 'insight':

@@ -15,6 +15,9 @@ FILES = {
           <project name="device/acme/board"/>
           <project name="device/acme/common"/>
           <project name="qnx/drivers/spi"/>
+          <project name="cam/venc" path="apps/venc"/>
+          <project name="cam/hal-gk7205" path="platform/hal/gk7205"/>
+          <project name="cam/rtl8812eu" path="drivers/rtl8812eu"/>
           <project name="obsolete/thing"/>
           <remove-project name="obsolete/thing"/>
         </manifest>''',
@@ -88,6 +91,22 @@ FILES = {
     'src/foo-app/lib/inner/deep.h': '#pragma once\n',
     'src/foo-app/lib/inner/deep2.h': '#pragma once\n',
     'src/foo-app/lib/a.c': 'int a;\n',
+
+    # Camera: app + service (CMake) -> thu vien HAL (Autotools) -> kernel module ngoai cay (Kbuild)
+    'apps/venc/CMakeLists.txt': '''
+        project(venc C)
+        find_package(PkgConfig)
+        pkg_check_modules(USB REQUIRED IMPORTED_TARGET libusb-1.0)
+        add_library(venc_core STATIC core.c)
+        add_executable(${PROJECT_NAME} main.c)
+        target_link_libraries(venc PRIVATE venc_core gk7205_backend pthread PkgConfig::USB)
+        add_executable(venc_test test.c)''',
+    'apps/venc/main.c': 'int main(void) { return 0; }\n',
+    'apps/venc/venc.service': '[Service]\nExecStart=/usr/bin/venc -c /etc/venc.json\n',
+    'platform/hal/gk7205/configure.ac': 'AC_INIT([gk7205], [1.0])\n',
+    'platform/hal/gk7205/Makefile.am': 'lib_LTLIBRARIES = libgk7205_backend.la\n'
+                                       'libgk7205_backend_la_LIBADD = -lmpi\ncheck_PROGRAMS = t1\n',
+    'drivers/rtl8812eu/Makefile': 'obj-m += 8812eu.o\nTARGET = ignored\n',
 
     # Python + DevOps repo
     'tools/extra/README.md': '# extra',

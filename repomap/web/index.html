@@ -11,11 +11,14 @@
     <div class="logo"><i>&#9670;</i> repomap</div>
     <div id="rootp"></div>
     <div id="stat"></div>
+    <div id="views" class="seg" role="group" data-i18n-title="viewTitle">
+      <button type="button" data-view="tree" data-i18n="viewTree"></button><button type="button" data-view="arch" data-i18n="viewBlocks"></button>
+    </div>
     <div id="sbox">
       <input id="q" data-i18n-ph="searchPh" autocomplete="off">
       <div id="res"></div>
     </div>
-    <div id="lang" role="group" data-i18n-title="langTitle">
+    <div id="lang" class="seg" role="group" data-i18n-title="langTitle">
       <button type="button" data-lang="en">EN</button><button type="button" data-lang="vi">VI</button>
     </div>
     <button id="b-panel" data-i18n-title="panelToggle">&#9776;</button>
@@ -31,6 +34,15 @@
       <svg id="svg"><g id="vp"><g id="gl"></g><g id="gn"></g></g></svg>
       <div id="legend"></div>
       <div class="empty" id="empty" data-i18n="loading"></div>
+      <div id="arch" hidden>
+        <div class="arch-bar">
+          <input id="arch-q" data-i18n-ph="archFilter" autocomplete="off">
+          <div id="arch-layers"></div>
+          <span id="arch-stat" class="muted"></span>
+          <button id="arch-rescan" data-i18n="rescan"></button>
+        </div>
+        <div id="arch-scroll"><div id="arch-canvas"></div></div>
+      </div>
     </section>
 
     <aside id="panel">
