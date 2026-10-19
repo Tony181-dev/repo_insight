@@ -8,6 +8,7 @@ Ket qua: {'layers': [{id, label}],
           'boxes': [{id, repo, layer, kind, label, total, comps: [{name, type, f, n, note?, svc?, deps?}]}],
           'edges': [[box_tu, box_den, so_lien_ket, 'use'|'build']], 'took', 'repos', 'comps'}
 """
+import hashlib
 import json
 import os
 import re
@@ -21,7 +22,7 @@ from .fileview import resolve_ref
 from .parsers import bp_modules, logical_lines, mk_modules, parse_vars, src_uri_refs, vars_dict
 from .parsers_devops import yaml_children
 from .parsers_py import read_toml, requirement_names
-from .util import bb_name, read_text
+from .util import bb_name, git, read_text
 from .workspace import find_layers
 
 # tang tu tren xuong duoi
@@ -131,6 +132,7 @@ class _Repo:
     def __init__(self, ws, p):
         self.ws, self.p, self.repo = ws, p, p['path']
         self.comps, self.svcs, self.links = [], [], defaultdict(list)
+        self.has_src, self.failed = None, False
 
     def read(self, rel):
         return read_text(self.ws.abs(self.repo, rel)) or ''
@@ -586,13 +588,33 @@ def _fallback(R, files):
         R.add(tail, 'boot', 'board', '', 0)
     elif mains:
         R.add(tail, 'exe', 'app', mains[0], 1)
-    elif src:
+    elif src or (R.has_src and R.has_src()):          # danh sach da loc theo pathspec: hoi git rieng (chi luc can)
         R.add(tail, 'lib', 'lib', '', 0)
     elif not R.comps:
         R.add(tail, 'repo', 'build', '', 0)
 
 
 # ---------------------------------------------------------------- 1 repo
+
+# file can doc (pathspec git, '*' khop ca '/'): git chi tra ve cac file nay thay vi toan bo repo -> nhe hon nhieu
+# voi workspace hang nghin repo. Them loai file moi o _bucket() thi nho them mau o day.
+PATHSPEC = ['*' + n for n in BUCKET] + [
+    '*.service', '*.rc', '*init.d/*', '*compose*.yml', '*compose*.yaml', '*Dockerfile*', '*.dockerfile', '*.tf',
+    '*.dts', '*.dtso', '*.build', '*.gitlab-ci*', '*Jenkinsfile*', '.github/workflows/*', '*azure-pipelines.yml',
+    '*bitbucket-pipelines.yml', '*.drone.yml', '*.travis.yml', '*roles/*/tasks/*', '*requirements*.txt',
+    '*BoardConfig*.mk', '*AndroidProducts.mk', '*.bb', '*conf/machine/*.conf', 'bin/bitbake', '*.go',
+    '*src/main.rs', '*src/lib.rs', '*src/bin/*.rs', '*__init__.py', ':(glob)*.py', ':(glob)*/*.py',
+    '*main.c', '*main.cc', '*main.cpp', '*main.cxx', '*main.rs']
+SRC_SPEC = ['*.c', '*.cc', '*.cpp', '*.cxx', '*.rs', '*.java', '*.kt', '*.go']
+
+
+def _ls(ws, repo, spec, refresh=False):
+    """(file, day_du): git ls-files loc theo pathspec; repo khong phai git -> toan bo danh sach (day_du=True)."""
+    out = git(ws.abs(repo), 'ls-files', '-z', '--', *spec, timeout=120)
+    if out is not None:
+        return [f for f in out.split('\0') if f], False
+    return ws.repo_files(repo, refresh=refresh)[0], True
+
 
 def scan_repo(ws, p, refresh=False):
     R = _Repo(ws, p)
@@ -602,7 +624,8 @@ def scan_repo(ws, p, refresh=False):
     if tags & {'kernel', 'u-boot'}:
         _kernel(R)
         return R
-    files = ws.repo_files(p['path'], refresh=refresh)[0]
+    files, full = _ls(ws, p['path'], PATHSPEC, refresh)
+    R.has_src = None if full else (lambda: bool(_ls(ws, p['path'], SRC_SPEC)[0]))
     if 'bitbake' in tags:
         R.add('BitBake', 'tool', 'build', 'bin/bitbake' if 'bin/bitbake' in files else '', 0)
     if tags & {'yocto-layer', 'yocto-multi'}:
@@ -689,30 +712,112 @@ def _scan_safe(ws, p, refresh, errors):
     except Exception as e:  # noqa: BLE001
         print('  ! block view: %s: %s' % (p['path'], traceback.format_exc()), file=sys.stderr)
         errors.append({'repo': p['path'], 'error': '%s: %s' % (type(e).__name__, e)})
-        return _Repo(ws, p)
+        R = _Repo(ws, p)
+        R.failed = True
+        return R
+
+
+# ---------------------------------------------------------------- cache tren dia (theo tung repo)
+#
+# Ket qua quet 1 repo duoc dung lai o lan mo sau neu repo do chua doi: cung HEAD (commit) va cung mtime cua
+# .git/index (doi khi checkout / repo sync / commit). Sua file ma chua commit thi khong nhan ra: dung nut Rescan.
+
+CACHE_VER = 1
+
+
+def cache_file(ws):
+    base = os.environ.get('REPOMAP_CACHE_DIR') or os.path.join(
+        os.environ.get('XDG_CACHE_HOME') or os.path.join(os.path.expanduser('~'), '.cache'), 'repomap')
+    return os.path.join(base, 'arch-%s.json' % hashlib.sha1(ws.root.encode('utf-8')).hexdigest()[:16])
+
+
+def _git_state(d):
+    """[HEAD (ref@sha hoac sha), mtime .git/index] doc thang tu file (khong goi git), None neu khong phai repo git."""
+    g = os.path.join(d, '.git')
+    if os.path.isfile(g):                                            # worktree / submodule: "gitdir: ..."
+        m = re.match(r'gitdir:\s*(.+)', (read_text(g, 4096) or '').strip())
+        if not m:
+            return None
+        g = os.path.normpath(os.path.join(d, m.group(1).strip()))
+    head = (read_text(os.path.join(g, 'HEAD'), 4096) or '').strip()
+    if not head:
+        return None
+    if head.startswith('ref:'):
+        ref, sha = head[4:].strip(), ''
+        common = (read_text(os.path.join(g, 'commondir'), 4096) or '').strip()
+        for x in [g] + ([os.path.normpath(os.path.join(g, common))] if common else []):
+            sha = (read_text(os.path.join(x, *ref.split('/')), 200) or '').strip()
+            if not sha:
+                m = re.search(r'^(\w+) ' + re.escape(ref) + r'$', read_text(os.path.join(x, 'packed-refs')) or '', re.M)
+                sha = m.group(1) if m else ''
+            if sha:
+                break
+        head = ref + '@' + sha
+    try:
+        idx = os.stat(os.path.join(g, 'index')).st_mtime_ns
+    except OSError:
+        idx = 0
+    return [head, idx]
+
+
+def _load_cache(path):
+    try:
+        with open(path, encoding='utf-8') as f:
+            data = json.load(f)
+        return data['repos'] if data.get('v') == CACHE_VER else {}
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+
+
+def _save_cache(path, entries):
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path + '.tmp', 'w', encoding='utf-8') as f:
+            json.dump({'v': CACHE_VER, 'repos': entries}, f, ensure_ascii=False, separators=(',', ':'))
+        os.replace(path + '.tmp', path)
+    except OSError as e:
+        print('  ! block view: cannot write cache %s: %s' % (path, e), file=sys.stderr)
 
 
 def build_arch(ws, refresh=False):
-    """refresh=True: doc lai danh sach file cua moi repo (nut Rescan)."""
+    """refresh=True (nut Rescan): bo qua cache, quet lai moi repo."""
     t0 = time.time()
-    errors = []
+    errors, entries, hits = [], {}, [0]
+    cpath = cache_file(ws)
+    cache = {} if refresh else _load_cache(cpath)
+
+    def one(p):
+        st = _git_state(ws.abs(p['path']))
+        key = [CACHE_VER, p['kind'], p['tags'], st] if st else None
+        hit = cache.get(p['path'])
+        if key and hit and hit.get('k') == key:
+            hits[0] += 1
+            entries[p['path']] = hit
+            return hit['comps'], hit['svcs']
+        R = _scan_safe(ws, p, refresh, errors)
+        if key and not R.failed:
+            entries[p['path']] = {'k': key, 'comps': R.comps, 'svcs': [list(s) for s in R.svcs]}
+        return R.comps, R.svcs
+
     with ThreadPoolExecutor(max(1, ws.workers)) as ex:
-        results = list(ex.map(lambda p: _scan_safe(ws, p, refresh, errors), ws.repos))
+        results = list(ex.map(one, ws.repos))
+    if entries:
+        _save_cache(cpath, entries)                      # ghi truoc khi buoc gop ben duoi sua cac component
 
     comps, svcs = [], []
-    for R in results:
+    for p, (rcomps, rsvcs) in zip(ws.repos, results):
         seen = set()
-        for c in R.comps:
+        for c in rcomps:
             key = (c['name'], c['layer'], c['type'])
             if key not in seen:
                 seen.add(key)
                 comps.append(c)
-        svcs += [(R.repo,) + s for s in R.svcs]
+        svcs += [(p['path'],) + tuple(s) for s in rsvcs]
     for c in comps:
         _refine(c)
 
     # service (systemd / init) -> danh dau binary tuong ung la service, khong thi tao component rieng
-    exes = defaultdict(list)
+    exes, units = defaultdict(list), set()
     for c in comps:
         if c['type'] in ('exe', 'container'):
             exes[c['name'].lower()].append(c)
@@ -723,7 +828,8 @@ def build_arch(ws, refresh=False):
             for c in cands[:1]:
                 c['svc'] = True
                 c.setdefault('units', []).append(unit)
-        elif unit.lower() not in {c['name'].lower() for c in comps if c['repo'] == repo and c['type'] == 'svc'}:
+        elif (repo, unit.lower()) not in units:
+            units.add((repo, unit.lower()))
             c = {'name': unit, 'type': 'svc', 'layer': 'app', 'f': rel, 'n': ln, 'deps': [], 'eco': 'c',
                  'builds': [], 'note': exe if exe != unit else '', 'repo': repo, 'svc': True}
             _refine(c)
@@ -738,6 +844,9 @@ def build_arch(ws, refresh=False):
 
     bid = lambda c: c['repo'] + '#' + c['layer']  # noqa: E731
     edges, ext = Counter(), defaultdict(Counter)
+    by_repo = defaultdict(set)
+    for c in comps:
+        by_repo[c['repo']].add(bid(c))
     for c in comps:
         for d in dict.fromkeys(c['deps']):
             cands = []
@@ -755,9 +864,9 @@ def build_arch(ws, refresh=False):
                 edges[(bid(c), 'ext#' + eco, 'use')] += 1
                 c.setdefault('uses', []).append(name)
         for repo in c['builds']:
-            for o in comps:
-                if o['repo'] == repo and bid(o) != bid(c):
-                    edges[(bid(c), bid(o), 'build')] += 1
+            for b in by_repo.get(repo, ()):
+                if b != bid(c):
+                    edges[(bid(c), b, 'build')] += 1
 
     boxes = {}
     kind_of = {p['path']: p['kind'] for p in ws.repos}
@@ -780,6 +889,7 @@ def build_arch(ws, refresh=False):
         if b['layer'] != 'ext':
             b['comps'].sort(key=lambda x: (TYPE_ORDER.get(x['type'], 5) - (0.5 if x.get('svc') else 0), x['name'].lower()))
         b['total'] = len(b['comps'])
+        b['n'] = dict(Counter('svc' if c.get('svc') else c['type'] for c in b['comps']))   # tom tat khi thu gon
         b['comps'] = b['comps'][:MAX_EXT if b['layer'] == 'ext' else MAX_COMPS]
 
     order = {k: i for i, (k, _) in enumerate(LAYERS)}
@@ -787,4 +897,23 @@ def build_arch(ws, refresh=False):
             'boxes': sorted(boxes.values(), key=lambda b: (order[b['layer']], b['repo'], b['label'])),
             'edges': [[a, b, n, k] for (a, b, k), n in sorted(edges.items())],
             'repos': len(ws.repos), 'comps': len(comps), 'took': round(time.time() - t0, 2),
-            'errors': sorted(errors, key=lambda e: e['repo'])}
+            'cached': hits[0], 'errors': sorted(errors, key=lambda e: e['repo'])}
+
+
+SLIM_COMPS = 40   # so component moi khoi gui ve trong ban gon (du ve khoi da mo; panel lay chi tiet rieng)
+
+
+def slim_arch(a):
+    """Ban gon cho giao dien: moi component chi con ten / loai (/ ghi chu ngan). Chi tiet: box_detail()."""
+    boxes = []
+    for b in a['boxes']:
+        s = {k: b[k] for k in ('id', 'repo', 'layer', 'kind', 'label', 'total', 'n')}
+        s['comps'] = [dict({'name': c['name'], 'type': c['type']}, **({'svc': 1} if c.get('svc') else {}),
+                           **({'note': c['note']} if c.get('note') and len(c['note']) < 40 else {}))
+                      for c in b['comps'][:SLIM_COMPS]]
+        boxes.append(s)
+    return dict(a, boxes=boxes)
+
+
+def box_detail(a, box_id):
+    return next((b for b in a['boxes'] if b['id'] == box_id), {'error': 'no such block: ' + box_id})

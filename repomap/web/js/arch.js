@@ -11,6 +11,7 @@ import { showHtml } from './panel.js';
 const A = $('#arch'), STAGE = $('#arch-scroll'), CANVAS = $('#arch-canvas');
 const Q = $('#arch-q'), STAT = $('#arch-stat'), ZOOM = $('#arch-zoom');
 const SHOW = 40;          // so component hien trong 1 khoi da mo (panel hien day du)
+const PAGE = 60;          // so khoi hien moi tang, bam "+60 nua" / "Hien tat ca" de xem them
 const ZMIN = 0.08, ZMAX = 2.5, FAR = 0.6;
 
 export const LAYER_COLOR = {
@@ -30,6 +31,8 @@ let follow = true;                       // bam khoi -> truot khoi vao giua khun
 try { follow = localStorage.getItem(FOLLOW_KEY) !== '0'; } catch (e) { /* storage bi chan */ }
 let byId = new Map(), out = new Map(), inc = new Map();
 const hidden = new Set(), opened = new Set();
+const shown = {};                         // tang -> so khoi dang hien
+const details = new Map();                // id khoi -> chi tiet (/api/archbox), tai khi bam
 
 const layerName = id => t('layer_' + id);
 const color = b => (b.kind === 'ext' ? LAYER_COLOR.ext : KIND_COLOR[b.kind] || '#6b7280');
@@ -45,22 +48,26 @@ function index() {
     (out.get(a) || out.set(a, []).get(a)).push([b, n, k]);
     (inc.get(b) || inc.set(b, []).get(b)).push([a, n, k]);
   }
+  // khoi "quan trong" (nhieu lien ket, nhieu component) dung truoc trong tang
+  for (const b of data.boxes) b.score = 3 * ((out.get(b.id)?.length || 0) + (inc.get(b.id)?.length || 0)) + b.total;
 }
 
 // ---------------------------------------------------------------- ve
 
 const chip = c => `<span class="ac t-${c.type}${c.svc ? ' svc' : ''}" title="${esc(`${typeName(c)}: ${c.name}`
-  + (c.note ? ` (${c.note})` : '') + (c.svc ? `\n${t('svcUnits')}: ${c.svc.join(', ')}` : ''))}"><i>${ICON[ctype(c)] || '•'}</i>${esc(c.name)}</span>`;
+  + (c.note ? ` (${c.note})` : ''))}"><i>${ICON[ctype(c)] || '•'}</i>${esc(c.name)}</span>`;
 
-// khoi thu gon: so component theo loai, vd  ⚙ 1  ▶ 3  ▣ 2
+// khoi thu gon: so component theo loai (tinh tren ca khoi), vd  ⚙ 1  ▶ 3  ▣ 2
 function summary(b) {
-  const n = {};
-  b.comps.forEach(c => (n[ctype(c)] = (n[ctype(c)] || 0) + 1));
+  const n = b.n || {};
   const parts = Object.keys(n).sort((x, y) => ICON_ORDER.indexOf(x) - ICON_ORDER.indexOf(y))
     .map(k => `<span title="${esc(t('type_' + k))}"><i>${ICON[k] || '•'}</i>${n[k]}</span>`);
-  if (b.total > b.comps.length) parts.push(`<span>+${b.total - b.comps.length}</span>`);
   return `<div class="asum">${parts.join('')}</div>`;
 }
+
+// nut cuoi tang khi con khoi chua hien
+const moreBtn = (L, rest) => `<div class="amore"><button data-more="${L}">${t('more', { n: Math.min(PAGE, rest) })}</button>
+  <button data-all="${L}">${t('showAll', { n: rest })}</button></div>`;
 
 function boxHtml(b, q) {
   const rel = new Set([...(out.get(sel) || []), ...(inc.get(sel) || [])].map(x => x[0]));
@@ -89,13 +96,20 @@ function render() {
   let h = '', nb = 0, nc = 0;
   for (const L of data.layers) {
     if (hidden.has(L.id)) continue;
-    const boxes = data.boxes.filter(b => b.layer === L.id && matches(b, q));
+    const boxes = data.boxes.filter(b => b.layer === L.id && matches(b, q))
+      .sort((x, y) => y.score - x.score || x.repo.localeCompare(y.repo));
     if (!boxes.length) continue;
     const c = LAYER_COLOR[L.id], comps = boxes.reduce((s, b) => s + b.total, 0);
     nb += boxes.length; nc += comps;
+    const lim = shown[L.id] || PAGE;
+    const vis = boxes.slice(0, lim);
+    if (sel && byId.get(sel)?.layer === L.id && !vis.some(b => b.id === sel) && boxes.some(b => b.id === sel)) {
+      vis.push(byId.get(sel));                         // khoi dang chon luon hien, du nam ngoai trang
+    }
     h += `<section class="band" style="--lc:${c};border-color:${c}55;background:${c}0d">
       <div class="band-hd"><b>${esc(layerName(L.id))}</b><small>${t('archCount', { b: boxes.length, c: comps })}</small></div>
-      <div class="band-body">${boxes.map(b => boxHtml(b, q)).join('')}</div></section>`;
+      <div class="band-body">${vis.map(b => boxHtml(b, q)).join('')}${
+        boxes.length > lim ? moreBtn(L.id, boxes.length - lim) : ''}</div></section>`;
   }
   CANVAS.innerHTML = `<svg id="arch-links"></svg>` + (h || `<div class="muted arch-none">${t('noMatch')}</div>`);
   const errs = data.errors || [];
@@ -245,16 +259,18 @@ function linkList(list) {
   }).join('')}</div>`;
 }
 
-function panelHtml(b) {
+function panelHtml(b, d) {
   let h = `<div class="hd"><span class="dot" style="background:${color(b)}"></span><div>
     <div class="ttl">${esc(tl(b.label))}</div><div class="sub">${esc(b.repo ? b.repo + ' · ' : '')}${esc(layerName(b.layer))}</div></div></div>`;
   if (b.repo) {
     h += `<div class="btns"><button data-a="repo" data-p="${esc(b.repo)}">${t('showInTree')}</button>
       <button data-a="src" data-repo="${esc(b.repo)}" data-base="" data-f="">${t('openSource')}</button></div>`;
   }
-  h += `<h4>${t('components')} <span>${b.total > b.comps.length ? t('showing', { a: b.comps.length, b: b.total }) : b.total}</span></h4>`;
-  if (b.comps.length > 10) h += `<input class="flt" placeholder="${esc(t('filter'))}" data-flt="#acomps tr">`;
-  h += `<table class="kv" id="acomps">${b.comps.map(c => {
+  h += `<h4>${t('components')} <span>${d && b.total > d.comps.length ? t('showing', { a: d.comps.length, b: b.total }) : b.total}</span></h4>`;
+  if (!d) h += `<div class="load">${t('reading')}</div>`;
+  else if (d.error) h += `<div class="err">${esc(d.error)}</div>`;
+  else if (d.comps.length > 10) h += `<input class="flt" placeholder="${esc(t('filter'))}" data-flt="#acomps tr">`;
+  if (d && !d.error) h += `<table class="kv" id="acomps">${d.comps.map(c => {
     const extra = [c.note, c.svc && `${t('svcUnits')}: ${c.svc.join(', ')}`, c.uses && `${t('uses')}: ${c.uses.join(', ')}`]
       .filter(Boolean).map(x => `<div class="muted">${esc(x)}</div>`).join('');
     const file = c.f ? `<a class="lnk" data-a="src" data-repo="${esc(b.repo)}" data-base="${esc(parent(c.f))}" data-f="${esc(c.f)}"
@@ -269,7 +285,14 @@ function panelHtml(b) {
 function showInfo() {
   if (!data) return;
   const b = sel && byId.get(sel);
-  showHtml(b ? panelHtml(b) : `<div class="muted">${t('archHelp')}</div>`);
+  if (!b) { showHtml(`<div class="muted">${t('archHelp')}</div>`); return; }
+  showHtml(panelHtml(b, details.get(b.id)));
+  if (!details.has(b.id)) {                            // chi tiet tai khi can: lan dau bam khoi nay
+    api('archbox', { id: b.id }).then(d => {
+      details.set(b.id, d);
+      if (sel === b.id) showHtml(panelHtml(b, d));
+    });
+  }
 }
 
 // chon khoi (mo ra luon). Bat "tu can giua": luon truot khoi vao giua; tat: chi khi chon tu panel / tim kiem
@@ -309,6 +332,7 @@ async function load(force = false) {
   $('#arch-rescan').disabled = false;
   if (d.error) { CANVAS.innerHTML = `<div class="err arch-none">${esc(d.error)}</div>`; return; }
   data = d;
+  details.clear();
   index();
   if (sel && !byId.has(sel)) sel = null;
   render();
@@ -336,6 +360,12 @@ export function initArch() {
   bindPan();
   CANVAS.addEventListener('click', e => {
     if (moved) return;                                   // vua keo, khong phai bam
+    const m = e.target.closest('[data-more],[data-all]');
+    if (m) {
+      const L = m.dataset.more || m.dataset.all;
+      shown[L] = m.dataset.all ? Infinity : (shown[L] || PAGE) + PAGE;
+      return render();
+    }
     clickBox(e.target.closest('.abox')?.dataset.id);
   });
   $('#panel').addEventListener('click', e => {
@@ -354,7 +384,8 @@ export function initArch() {
   setFollow(follow);
   $('#arch-open').addEventListener('click', () => { data?.boxes.forEach(b => opened.add(b.id)); render(); });
   $('#arch-close').addEventListener('click', () => { opened.clear(); sel = null; render(); showInfo(); });
-  Q.addEventListener('input', render);
+  let typing = 0;                                       // go loc: doi go xong moi ve lai (hang nghin khoi)
+  Q.addEventListener('input', () => { clearTimeout(typing); typing = setTimeout(render, 180); });
   $('#arch-rescan').addEventListener('click', () => load(true));
   addEventListener('resize', () => { if (!A.hidden && data) render(); });
 }

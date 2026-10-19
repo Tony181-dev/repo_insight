@@ -19,7 +19,7 @@ from repomap.cli import apply_overrides, interactive, parse_args, resolve_settin
 from repomap.menu import run_menu  # noqa: E402
 from repomap.settings import (Settings, detect_ssh_port, load_settings, parse_sshd_ports,  # noqa: E402
                               save_settings, write_template)
-from repomap.arch import build_arch  # noqa: E402
+from repomap.arch import box_detail, build_arch, slim_arch  # noqa: E402
 from repomap.deepscan import deep_scan  # noqa: E402
 from repomap.fileview import file_lines, file_view, ver_match  # noqa: E402
 from repomap.insight import insight  # noqa: E402
@@ -28,6 +28,10 @@ from repomap.parsers_py import read_toml  # noqa: E402
 from repomap.server import start_server  # noqa: E402
 from repomap.source import list_dir, search  # noqa: E402
 from repomap.workspace import Workspace  # noqa: E402
+
+
+# cache cua block view: ghi vao thu muc tam, khong dong vao ~/.cache cua may chay test
+os.environ['REPOMAP_CACHE_DIR'] = tempfile.mkdtemp(prefix='repomap-cache-')
 
 
 class WorkspaceTest(unittest.TestCase):
@@ -220,6 +224,31 @@ class WorkspaceTest(unittest.TestCase):
         self.assertIn(('device/acme/board#app', 'device/acme/board#lib', 'use'), edges)
         self.assertIn(('layers/meta-acme#build', 'src/foo-app#app', 'build'), edges)   # SRC_URI -> repo
         self.assertEqual(a['errors'], [])
+        slim = slim_arch(a)                                       # giao dien: ban gon + chi tiet khi bam khoi
+        venc = next(b for b in slim['boxes'] if b['id'] == 'apps/venc#app')
+        self.assertEqual(venc['comps'], [{'name': 'venc', 'type': 'exe', 'svc': 1}])
+        self.assertEqual(venc['n'], {'svc': 1})
+        self.assertEqual(box_detail(a, 'apps/venc#app')['comps'][0]['f'], 'CMakeLists.txt')
+
+    def test_arch_cache(self):
+        """Repo chua doi HEAD / index: lan sau dung lai ket qua tren dia; Rescan hoac doi commit: quet lai."""
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Workspace(make_workspace(tmp), workers=2).load()
+            git_dir = os.path.join(tmp, 'apps', 'venc', '.git')
+            os.makedirs(git_dir)
+            head = os.path.join(git_dir, 'HEAD')
+            with open(head, 'w') as f:
+                f.write('0123abcd\n')
+            first = build_arch(ws)
+            self.assertEqual(first['cached'], 0)
+            again = build_arch(ws)
+            self.assertEqual(again['cached'], 1)
+            self.assertEqual([b['id'] for b in again['boxes']], [b['id'] for b in first['boxes']])
+            self.assertEqual(again['edges'], first['edges'])
+            self.assertEqual(build_arch(ws, refresh=True)['cached'], 0)
+            with open(head, 'w') as f:
+                f.write('ffff0000\n')
+            self.assertEqual(build_arch(ws)['cached'], 0)
 
     def test_toml_empty_value(self):
         """Dong 'key =' khong co gia tri (template, file dang sua do) tung lam IndexError ca block view."""

@@ -114,6 +114,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outli
 .abox:not(.open) .abox-hd { margin-bottom: 3px; }
 .asum { display: flex; gap: 9px; font: 11.5px var(--mono); color: var(--mute); padding-left: 14px; }
 .asum i { font-style: normal; color: var(--lc); margin-right: 3px; }
+.amore { display: flex; gap: 6px; align-self: center; }
+.amore button { border-style: dashed; color: var(--mute); }
+.amore button:hover { color: var(--fg); }
+#arch-canvas.far .amore button { font-size: 26px; padding: 10px 18px; }
 
 /* zoom xa: moi khoi chi con ten, chu to */
 #arch-canvas.far .asum, #arch-canvas.far .abox-cs, #arch-canvas.far .abox-hd small, #arch-canvas.far .car,
