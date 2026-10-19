@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.8", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Unit test
+        run: python -m unittest discover -s tests -v
+      - name: Build repomap.pyz
+        run: python tools/build_pyz.py
+      - name: Smoke test repomap.pyz
+        run: |
+          python dist/repomap.pyz --version
+          python - <<'EOF'
+          import sys, tempfile, subprocess, json
+          sys.path.insert(0, 'tests')
+          from fixture import make_workspace
+          ws = make_workspace(tempfile.mkdtemp())
+          out = subprocess.run([sys.executable, 'dist/repomap.pyz', ws, '--json', 'kernel/linux'],
+                               check=True, capture_output=True, text=True).stdout
+          assert json.loads(out)['deep']['total'] > 0
+          print('pyz ok')
+          EOF
+      - uses: actions/upload-artifact@v4
+        if: matrix.python == '3.12'
+        with:
+          name: repomap.pyz
+          path: dist/repomap.pyz

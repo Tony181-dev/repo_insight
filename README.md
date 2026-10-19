@@ -75,7 +75,12 @@ repomap/
   rules.py       bảng nhóm file + biến quan trọng (sửa ở đây để thêm loại mới)
   web/           index.html, style.css, js/{main,tree,graph,panel,util}.js
 tests/           unittest với workspace giả lập
+tools/           build_pyz.py (dùng chung cho build.bat và make pyz)
+legacy/          modmap.py - bản 1 file cũ, giữ để tham khảo, không còn phát triển
 ```
+
+CI (GitHub Actions) chạy test trên Linux với Python 3.8 và 3.12 mỗi lần push, và đính kèm
+file `repomap.pyz` đã build sẵn ở mục Artifacts của mỗi lần chạy.
 
 Thêm hệ build mới: thêm nhóm vào `rules.CATS`, file đánh dấu vào `classify.MARKS`,
 parser vào `parsers.parse_file`, màu vào `web/js/util.js` (`KIND_COLOR`).
