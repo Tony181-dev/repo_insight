@@ -77,17 +77,21 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outli
 #stage.arch-mode > :not(#arch) { display: none; }
 #arch { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--bg); }
 #arch[hidden] { display: none; }
-.arch-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line);
+.arch-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line);
   background: var(--bg2); flex-wrap: wrap; }
-.arch-bar input { width: 240px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 7px;
+.arch-bar input { width: 180px; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 7px;
   padding: 6px 9px; font: inherit; font-size: 12px; outline: none; }
 .arch-bar input:focus { border-color: var(--acc); }
 #arch-layers { display: flex; gap: 5px; flex-wrap: wrap; }
 .lchip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: 999px; font-size: 11.5px; }
 .lchip.off { opacity: .4; }
-#arch-stat { margin-left: auto; font-size: 12px; }
-#arch-scroll { flex: 1; overflow: auto; }
-#arch-canvas { position: relative; padding: 14px; display: flex; flex-direction: column; gap: 12px; min-height: 100%; }
+#arch-stat { margin-left: auto; font-size: 12px; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#arch-scroll { flex: 1; overflow: auto; cursor: grab; }
+#arch-scroll.panning { cursor: grabbing; user-select: none; }
+#arch-sizer { position: relative; overflow: hidden; }
+#arch-canvas { position: absolute; left: 0; top: 0; transform-origin: 0 0; padding: 14px; display: flex;
+  flex-direction: column; gap: 12px; }
+#arch-zoom { min-width: 52px; font-variant-numeric: tabular-nums; }
 #arch-links { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 3; }
 .arch-none { padding: 40px; text-align: center; }
 .band { display: grid; grid-template-columns: 180px 1fr; border: 1px solid; border-radius: 10px; }
@@ -103,6 +107,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outli
 .abox.dim { opacity: .3; }
 .abox-hd { display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px; white-space: nowrap; min-width: 0; }
 .abox-hd .dot { align-self: center; }
+.abox-hd .car { font-style: normal; color: var(--mute); font-size: 10px; width: 8px; align-self: center; }
+.abox:not(.open) { min-width: 0; }
+.abox:not(.open) .abox-hd { margin-bottom: 3px; }
+.asum { display: flex; gap: 9px; font: 11.5px var(--mono); color: var(--mute); padding-left: 14px; }
+.asum i { font-style: normal; color: var(--lc); margin-right: 3px; }
 .abox-hd b { font-weight: 650; overflow: hidden; text-overflow: ellipsis; }
 .abox-hd small { color: var(--mute); font: 11px var(--mono); overflow: hidden; text-overflow: ellipsis; }
 .abox-cs { display: flex; flex-wrap: wrap; gap: 4px; }

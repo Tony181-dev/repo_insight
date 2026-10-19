@@ -38,8 +38,10 @@ const DICT = {
     archHelp: 'Architecture of the whole workspace, detected from build and service files.<br><br>' +
       '• Each band is a layer: applications/services, libraries, platform/HAL, external libraries, kernel/drivers, ' +
       'board/BSP, build/tooling<br>• Each block is one repo in that layer, with the components found in it<br>' +
-      '• Click a block: green lines = what it uses, dashed yellow = who uses it<br>' +
-      '• Click the layer chips to hide or show a layer',
+      '• Blocks are collapsed: click one to open it and draw its links (green = what it uses, ' +
+      'dashed yellow = who uses it); click it again to close<br>' +
+      '• Scroll to zoom, drag to move; click the layer chips to hide or show a layer',
+    expandAll: 'Expand all', collapseAll: 'Collapse all', zoomReset: 'Back to 100%',
     components: 'Components', uses: 'Uses', usedBy: 'Used by', builds: 'builds', showInTree: 'Show in tree',
     svcUnits: 'started by',
     layer_app: 'Applications & services', layer_lib: 'Libraries & frameworks',
@@ -88,8 +90,10 @@ const DICT = {
     archHelp: 'Kiến trúc tổng của workspace, tự nhận diện từ file build và file service.<br><br>' +
       '• Mỗi dải là một tầng: ứng dụng/service, thư viện, nền tảng/HAL, thư viện ngoài, kernel/driver, ' +
       'board/BSP, build/công cụ<br>• Mỗi khối là một repo trong tầng đó, kèm các component tìm được<br>' +
-      '• Bấm vào khối: đường xanh = khối đó dùng gì, đường vàng nét đứt = ai dùng nó<br>' +
-      '• Bấm các nút tầng để ẩn/hiện tầng',
+      '• Khối được thu gọn: bấm vào để mở và vẽ liên kết (xanh = khối đó dùng gì, ' +
+      'vàng nét đứt = ai dùng nó); bấm lần nữa để đóng<br>' +
+      '• Cuộn chuột để zoom, kéo để di chuyển; bấm các nút tầng để ẩn/hiện tầng',
+    expandAll: 'Mở hết', collapseAll: 'Thu hết', zoomReset: 'Về 100%',
     components: 'Component', uses: 'Dùng', usedBy: 'Được dùng bởi', builds: 'build', showInTree: 'Xem trên cây',
     svcUnits: 'khởi chạy bởi',
     layer_app: 'Ứng dụng & service', layer_lib: 'Thư viện & framework',

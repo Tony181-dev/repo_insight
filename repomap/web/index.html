@@ -38,10 +38,14 @@
         <div class="arch-bar">
           <input id="arch-q" data-i18n-ph="archFilter" autocomplete="off">
           <div id="arch-layers"></div>
+          <button id="arch-open" data-i18n="expandAll"></button>
+          <button id="arch-close" data-i18n="collapseAll"></button>
+          <button id="arch-fit" data-i18n="fit"></button>
+          <button id="arch-zoom" data-i18n-title="zoomReset">100%</button>
           <span id="arch-stat" class="muted"></span>
           <button id="arch-rescan" data-i18n="rescan"></button>
         </div>
-        <div id="arch-scroll"><div id="arch-canvas"></div></div>
+        <div id="arch-scroll"><div id="arch-sizer"><div id="arch-canvas"></div></div></div>
       </div>
     </section>
 
