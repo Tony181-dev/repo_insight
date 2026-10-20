@@ -1,7 +1,8 @@
 """Cau hinh (file INI). Thu tu uu tien: tham so dong lenh > file cau hinh > mac dinh.
 
 File duoc tim theo thu tu (lay file dau tien ton tai):
-  --config PATH  >  $REPOMAP_CONFIG  >  ./repomap.ini  >  $XDG_CONFIG_HOME/repomap/config.ini (~/.config/...)
+  --config PATH  >  $REPOMAP_CONFIG  >  ./repomap.ini  >  repomap.ini canh repomap.pyz
+  >  $XDG_CONFIG_HOME/repomap/config.ini (~/.config/...)
 Tao/sua file: menu "2. Configuration" (luu lai de lan sau khong phai nhap), hoac  repomap --init-config
 """
 import configparser
@@ -9,6 +10,7 @@ import getpass
 import glob
 import os
 import re
+import shlex
 import socket
 from dataclasses import dataclass, fields
 
@@ -47,10 +49,13 @@ workers = {workers}
 """
 
 
+DEFAULT_PORT = 6969
+
+
 @dataclass
 class Settings:
     host: str = '127.0.0.1'
-    port: int = 8800
+    port: int = DEFAULT_PORT
     port_tries: int = 20
     open_browser: str = 'auto'      # auto | yes | no
     workers: int = 0                # 0 = tu chon
@@ -114,9 +119,43 @@ def parse_sshd_ports(text):
     return [int(m.group(1)) for m in re.finditer(r'^\s*Port\s+(\d+)\s*$', text, re.M | re.I)]
 
 
-def _listening(port):
+QUICK_HELP = 'Please copy the SSH command for your vbee server and paste it here.'
+QUICK_EXAMPLE = 'ssh -p <ssh_port> <user>@<host>.vbee.lge.com'
+
+
+def parse_ssh_command(text):
+    """'ssh -p 56614 worker@host.vbee.lge.com' -> ('worker', 'host.vbee.lge.com', 56614).
+    -p o vi tri nao cung duoc, thieu -p = 22; ValueError neu khong doc duoc."""
     try:
-        with socket.create_connection(('127.0.0.1', port), timeout=0.3):
+        words = shlex.split(text.strip().lstrip('$> '))
+    except ValueError:
+        words = text.split()
+    if words and os.path.basename(words[0]).lower() in ('ssh', 'ssh.exe'):
+        words = words[1:]
+    port, user, host, i = 22, '', '', 0
+    while i < len(words):
+        w = words[i]
+        if w in ('-p', '-l') and i + 1 < len(words):
+            if w == '-p':
+                port = check_port(words[i + 1])
+            else:
+                user = words[i + 1]
+            i += 2
+            continue
+        if w.startswith('-p') and w[2:].isdigit():
+            port = check_port(w[2:])
+        elif not w.startswith('-') and not host:
+            user, _, host = w.rpartition('@') if '@' in w else (user, '', w)
+        i += 1
+    if not (user and host) or not re.match(r'^[\w.-]+$', user) or not re.match(r'^[A-Za-z0-9.-]+$', host):
+        raise ValueError('expected something like: ' + QUICK_EXAMPLE)
+    return user, host, port
+
+
+def port_busy(port, host='127.0.0.1'):
+    """Da co chuong trinh nghe o port nay tren may nay chua."""
+    try:
+        with socket.create_connection((host, port), timeout=0.3):
             return True
     except OSError:
         return False
@@ -134,7 +173,7 @@ def detect_ssh_port(config='/etc/ssh/sshd_config'):
     if not ports:
         return 22, 'default'
     for p in ports:
-        if _listening(p):
+        if port_busy(p):
             return p, 'sshd_config, listening'
     return ports[0], 'sshd_config'
 
@@ -146,19 +185,27 @@ def default_path():
     return os.path.join(base, 'repomap', 'config.ini')
 
 
+def app_archive():
+    """Duong dan repomap.pyz dang chay (None neu chay tu source)."""
+    archive = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return archive if os.path.isfile(archive) else None
+
+
 def find_config(explicit=None):
     if explicit:
         if not os.path.isfile(explicit):
             raise SystemExit('config file not found: ' + explicit)
         return explicit
-    for p in (os.environ.get('REPOMAP_CONFIG'), 'repomap.ini', default_path()):
+    archive = app_archive()
+    for p in (os.environ.get('REPOMAP_CONFIG'), 'repomap.ini',
+              archive and os.path.join(os.path.dirname(archive), 'repomap.ini'), default_path()):
         if p and os.path.isfile(p):
             return p
     return None
 
 
 def check_port(value):
-    """'8800' -> 8800; bao loi ValueError neu khong phai port hop le."""
+    """'6969' -> 6969; bao loi ValueError neu khong phai port hop le."""
     try:
         port = int(str(value).strip())
     except ValueError:

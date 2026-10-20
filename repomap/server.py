@@ -109,7 +109,7 @@ class Server(ThreadingHTTPServer):
         super().handle_error(request, client_address)
 
 
-def start_server(ws, host='127.0.0.1', port=8800, tries=20):
+def start_server(ws, host='127.0.0.1', port=6969, tries=20):
     """Mo server o cong trong dau tien trong [port, port+tries)."""
     handler = make_handler(ws)
     for p in range(port, port + tries):

@@ -22,24 +22,42 @@ Trong các lệnh dưới đây, thay các tên mẫu bằng giá trị thật c
 | `user` | tài khoản ssh trên máy build | `dev` |
 
 ```sh
-repomap ~/your_workspace_root                       # menu: 1. Run scan / 2. Configuration / 0. Exit
+repomap ~/your_workspace_root                       # menu: 1. Run scan / 2. Configuration / 3. Quick setup / 0. Exit
 repomap                                             # như trên, dùng workspace đã quét lần trước
 repomap ~/your_workspace_root --run                 # bỏ qua menu, chạy ngay (dùng trong script)
 repomap ~/your_workspace_root --json vendor/foo     # in JSON insight + quét sâu 1 repo
+repomap --local                                     # trên PC: trang Connect / Saved servers / Deploy
 python3 -m repomap ...                              # chạy từ source, cùng tham số
 ```
 
-Máy build ở xa: chạy `repomap ~/your_workspace_root` trên máy đó; lần đầu chọn `2. Configuration` để nhập
-port server, ssh host/user/port (port ssh tự đọc từ `/etc/ssh/sshd_config`), rồi `1. Run scan`.
-Tool in sẵn lệnh tunnel, ví dụ `ssh -N -L 8800:127.0.0.1:8800 user@your_build_server`
-(thêm `-p <port>` nếu ssh không ở port 22); chạy lệnh đó trên PC, giữ cửa sổ mở, rồi mở http://127.0.0.1:8800.
+Máy build ở xa: chạy `repomap ~/your_workspace_root` trên máy đó. Lần đầu chọn `3. Quick setup` và dán lệnh ssh
+của server (`ssh -p <ssh_port> <user>@<host>.vbee.lge.com`): tool tự điền ssh host/user/port, port server = 6969.
+Hoặc `2. Configuration` để nhập từng giá trị (port ssh tự đọc từ `/etc/ssh/sshd_config`). Rồi `1. Run scan`.
+Tool in sẵn lệnh tunnel, ví dụ `ssh -N -L 6969:127.0.0.1:6969 user@your_build_server`
+(thêm `-p <port>` nếu ssh không ở port 22); chạy lệnh đó trên PC, giữ cửa sổ mở, rồi mở http://127.0.0.1:6969.
+Port nào đang bận thì tool báo rõ và chuyển sang port kế tiếp.
+
+### Trên PC: không cần gõ lệnh
+
+Trên PC Windows có Python 3.8+, nhấp đúp `repomap-pc.cmd` (trong gói phát hành, cạnh `repomap.pyz`) hoặc chạy
+`python repomap.pyz --local`. Trình duyệt mở http://127.0.0.1:6960 với 3 tab:
+
+- **Connect**: Configuration (SSH host/user/port, port server = port PC, mặc định 6969; chấm xanh/đỏ), *Quick setup*
+  (dán lệnh ssh), *Save preset*. Nút **Connect** mở cửa sổ ssh tunnel (gõ password ở đó) và tự mở trang repomap khi
+  server trả lời. Port trên PC đang bận thì báo ngay.
+- **Saved servers**: tối đa 5 preset, chọn một preset để điền vào Configuration.
+- **Deploy to server**: `scp -r` một lần, đẩy `repomap.pyz` + `repomap.ini` (theo Configuration) vào `~/.bin` trên server.
+  Trên server chỉ cần `python3 ~/.bin/repomap.pyz` → `1. Run scan`, rồi bấm Connect trên PC.
+
+Cấu hình và preset của PC lưu ở `~/.config/repomap/local.json`. Trang tự tắt ~3 phút sau khi đóng tab.
 
 Giao diện có nút **EN / VI** cạnh ô tìm kiếm (mặc định tiếng Anh).
 
 ## Cấu hình
 
-Cách dễ nhất là menu `2. Configuration`: nhập rồi lưu vào `~/.config/repomap/config.ini`, lần sau không
-phải nhập lại. Workspace quét lần trước cũng được nhớ. Cũng có thể sửa file bằng tay:
+Cách dễ nhất là menu `3. Quick setup` hoặc `2. Configuration`: nhập rồi lưu vào `~/.config/repomap/config.ini`
+(hoặc file cấu hình đang dùng), lần sau không phải nhập lại. File `repomap.ini` nằm cạnh `repomap.pyz` (tab Deploy
+trên PC đẩy lên `~/.bin`) cũng được đọc, sau `./repomap.ini`. Workspace quét lần trước cũng được nhớ. Cũng có thể sửa file bằng tay:
 
 ```sh
 repomap --init-config                 # tạo ~/.config/repomap/config.ini (có chú thích)
@@ -50,7 +68,7 @@ repomap ~/your_workspace_root --config my.ini           # chỉ định file
 ```ini
 [server]
 host = 127.0.0.1      # 0.0.0.0 = mở cho cả mạng (không có xác thực)
-port = 8800           # bận thì tự thử port+1… tối đa port_tries lần
+port = 6969           # bận thì báo và tự thử port+1… tối đa port_tries lần
 port_tries = 20
 open_browser = auto   # auto: chỉ mở khi có màn hình (DISPLAY/WAYLAND_DISPLAY); yes / no
 

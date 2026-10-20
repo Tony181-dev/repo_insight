@@ -1,0 +1,57 @@
+/* Trang PC (local.html): Connect / Saved servers / Deploy. Dung chung bien mau va nut voi style.css. */
+body.lp { overflow: auto; }
+#ver { font-size: 12px; margin-left: auto; }
+.lw { max-width: 620px; margin: 0 auto; padding: 22px 16px 40px; }
+.ltabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 18px; }
+.ltabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--mute);
+  padding: 9px 14px; font-size: 13px; font-weight: 600; }
+.ltabs button:hover { color: var(--fg); }
+.ltabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--acc); }
+
+.card { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 16px; }
+.card.pad { padding: 16px; }
+.card p { margin: 0 0 8px; }
+.cfg-hd { width: 100%; display: flex; align-items: center; gap: 9px; border: 0; background: none; padding: 13px 16px;
+  font-size: 13.5px; text-align: left; }
+.cfg-hd .car { font-style: normal; color: var(--mute); width: 10px; }
+#cfg-sum { margin-left: auto; font-size: 12px; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+#cfg-dot.ok { background: #3fb950; box-shadow: 0 0 0 3px #3fb95033; }
+#cfg-dot.bad { background: #f85149; box-shadow: 0 0 0 3px #f8514933; }
+#cfg-body { padding: 0 16px 14px; border-top: 1px solid var(--line); }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-top: 14px; }
+.fields label { display: flex; flex-direction: column; gap: 5px; color: var(--mute); font-size: 12px; }
+.lp input { background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 7px;
+  padding: 7px 10px; font: 13px var(--mono); outline: none; min-width: 0; }
+.lp input:focus { border-color: var(--acc); }
+.lp input.bad { border-color: #f85149; }
+.links { display: flex; gap: 16px; margin-top: 12px; }
+.lnk { border: 0; background: none; padding: 0; color: var(--acc); font-size: 12.5px; }
+.lnk[aria-expanded="true"] { text-decoration: underline; }
+.sub { margin-top: 12px; padding: 12px; border: 1px dashed var(--line); border-radius: 8px; }
+.sub p { margin: 0 0 6px; }
+.row { display: flex; gap: 8px; }
+.row input { flex: 1; }
+code { font-family: var(--mono); font-size: 12px; background: var(--bg3); padding: 1px 5px; border-radius: 4px; }
+
+button.big { width: 100%; padding: 11px; font-size: 14px; font-weight: 600; }
+.msg { margin-top: 10px; font-size: 12.5px; line-height: 1.5; }
+.msg:empty { display: none; }
+.msg.ok { color: #3fb950; }
+.msg.warn { color: #e3b341; }
+.msg.bad { color: #ff7b72; }
+.msg.info { color: var(--mute); }
+.msg a { color: var(--acc); }
+.cmdline { margin-top: 8px; font: 11.5px var(--mono); color: var(--mute); word-break: break-all; }
+
+.preset { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 8px; cursor: pointer;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; }
+.preset:hover { border-color: var(--acc); }
+.preset b { font-size: 13.5px; }
+.preset .muted { font: 12px var(--mono); }
+.preset .del { margin-left: auto; padding: 3px 9px; color: var(--mute); }
+.preset .del:hover { color: #ff7b72; border-color: #ff7b72; }
+.files { margin: 0 0 14px; padding-left: 18px; line-height: 1.9; }
+.next { color: var(--mute); line-height: 1.9; padding-left: 20px; }
+
+@media (max-width: 520px) { .fields { grid-template-columns: 1fr; } }

@@ -300,7 +300,7 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
         <li>Chạy rồi chọn <code>1. Run scan</code>:
           <div class="cmd"><pre>repomap ~/your_workspace_root</pre></div></li>
       </ol>
-      <p>Trình duyệt tự mở tại <code>http://127.0.0.1:8800</code>. Không cần ssh.</p>
+      <p>Trình duyệt tự mở tại <code>http://127.0.0.1:6969</code>. Không cần ssh.</p>
     </div>
     <div>
       <h3 id="xa">Cách 2: source nằm trên máy build ở xa, bạn ssh vào</h3>
@@ -322,22 +322,30 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
       </svg>
       <ol class="steps">
         <li>Cài tool trên máy build, xem phần <a href="#cai-dat">Cài đặt</a>.</li>
-        <li>Trên máy build, chạy <code>repomap ~/your_workspace_root</code>. Lần đầu, chọn <code>2. Configuration</code> để nhập port và thông tin ssh (xem <a href="#cau-hinh">Cấu hình</a>), sau đó chọn <code>1. Run scan</code>. Tool in ra một lệnh dạng:
-          <div class="cmd"><pre>ssh -N -L 8800:127.0.0.1:8800 user@your_build_server</pre></div></li>
+        <li>Trên máy build, chạy <code>repomap ~/your_workspace_root</code>. Lần đầu, chọn <code>3. Quick setup</code> và dán lệnh ssh của server vbee (ví dụ <code>ssh -p 56614 worker@your-host.vbee.lge.com</code>), hoặc <code>2. Configuration</code> để nhập từng giá trị (xem <a href="#cau-hinh">Cấu hình</a>). Sau đó chọn <code>1. Run scan</code>. Tool in ra một lệnh dạng:
+          <div class="cmd"><pre>ssh -N -L 6969:127.0.0.1:6969 user@your_build_server</pre></div></li>
         <li>Trên PC của bạn, chạy lệnh đó rồi giữ cửa sổ terminal mở. Với <code>-N</code>, ssh chỉ giữ tunnel mà không mở shell, nên cửa sổ sẽ đứng yên; đó là bình thường.</li>
-        <li>Mở trình duyệt trên PC, vào <code>http://127.0.0.1:8800</code>.</li>
+        <li>Mở trình duyệt trên PC, vào <code>http://127.0.0.1:6969</code>.</li>
       </ol>
       <p>Tool đọc file ở máy build, còn bạn xem giao diện trên PC qua ssh tunnel. Không phải copy source về PC.</p>
-      <p class="sub">Port, user và tên máy trong lệnh tunnel chỉnh trong <code>2. Configuration</code>. Nếu port 8800 bận, tool tự chuyển sang 8801, 8802… và lệnh in ra theo port mới.</p>
+      <p class="sub">Port, user và tên máy trong lệnh tunnel chỉnh trong <code>2. Configuration</code>. Nếu port 6969 đang bận, tool báo rõ rồi tự chuyển sang 6970, 6971…; lệnh in ra theo port mới.</p>
+      <h3 id="pc">Không muốn gõ lệnh: dùng repomap trên PC (Windows)</h3>
+      <p>Cần Python 3.8+ trên PC. Nhấp đúp <code>repomap-pc.cmd</code> (nằm cạnh <code>repomap.pyz</code> trong gói phát hành), hoặc chạy <code>python repomap.pyz --local</code>. Trình duyệt mở trang <code>http://127.0.0.1:6960</code> có 3 tab:</p>
+      <ul class="limits">
+        <li><strong>Connect:</strong> mục Configuration (chấm xanh khi đã đủ thông tin, đỏ khi chưa) gồm SSH host, user, port và port server/PC (mặc định 6969). <em>Quick setup</em> nhận lệnh ssh dán vào; <em>Save preset</em> lưu theo tên. Bấm <strong>Connect</strong>: một cửa sổ ssh mở tunnel (gõ password ở đó nếu được hỏi), trang repomap tự mở khi server trả lời. Nếu port trên PC đang bận, trang báo ngay.</li>
+        <li><strong>Saved servers:</strong> tối đa 5 server; chọn một server để điền vào Configuration.</li>
+        <li><strong>Deploy to server:</strong> chép <code>repomap.pyz</code> và <code>repomap.ini</code> (cấu hình ở trên) vào <code>~/.bin</code> trên server bằng một lệnh scp. Trên server chỉ cần chạy <code>python3 ~/.bin/repomap.pyz</code> và chọn <code>1. Run scan</code>.</li>
+      </ul>
+      <p class="sub">Trang tự tắt khoảng 3 phút sau khi bạn đóng tab; cửa sổ tunnel vẫn chạy cho tới khi bạn đóng nó.</p>
       <h3>Không ssh được</h3>
       <p>Nếu lệnh ssh báo <code>Connection timed out</code> dù vẫn ping được máy build, thì đường ssh từ PC tới máy đó đang bị chặn, không phải lỗi của repomap. Thử lần lượt:</p>
       <ul class="limits">
         <li>Dùng đúng lệnh bạn vẫn ssh vào máy đó hằng ngày: cùng tên máy đầy đủ, cùng port. Nhập lại các giá trị đó trong <code>2. Configuration</code>.</li>
         <li>Bật VPN hoặc dùng mạng có dây; nhiều nơi chỉ mở ssh từ mạng nội bộ.</li>
         <li>Nếu phải đi qua một máy trung gian, thêm <code>-J user@jump_host</code> vào lệnh tunnel.</li>
-        <li>Nếu bạn vào máy build bằng VS Code Remote-SSH, không cần lệnh tunnel: mở tab Ports trong VS Code và forward cổng 8800.</li>
+        <li>Nếu bạn vào máy build bằng VS Code Remote-SSH, không cần lệnh tunnel: mở tab Ports trong VS Code và forward cổng 6969.</li>
       </ul>
-      <p class="sub">Nếu trình duyệt báo lỗi kiểu <code>"Not found." is not valid JSON</code>, cổng 8800 trên PC đang là một chương trình khác, thường vì tunnel chưa nối được.</p>
+      <p class="sub">Nếu trình duyệt báo lỗi kiểu <code>"Not found." is not valid JSON</code>, cổng 6969 trên PC đang là một chương trình khác, thường vì tunnel chưa nối được.</p>
     </div>
   </div>
 </section>
@@ -422,11 +430,13 @@ python3 tools/make_release.py  <span class="c"># không cần make</span></pre><
       <p>Chạy <code>repomap</code> trong terminal sẽ hiện menu:</p>
       <div class="cmd"><pre>  1. Run scan
   2. Configuration
+  3. Quick setup (paste your SSH command)
   0. Exit
 Choose [1]:</pre></div>
+      <p><code>3. Quick setup</code> là cách nhanh nhất: dán lệnh ssh của server vbee (<code>ssh -p &lt;ssh_port&gt; &lt;user&gt;@&lt;host&gt;.vbee.lge.com</code>), tool tự điền SSH host, user, port; port server và port trên PC đặt là 6969.</p>
       <p>Chọn <code>2. Configuration</code> để nhập port của server và thông tin dùng cho lệnh ssh tunnel. Bấm Enter để giữ giá trị trong ngoặc vuông:</p>
       <ul class="names">
-        <li><strong>Server port:</strong> cổng repomap mở trên máy build, mặc định 8800.</li>
+        <li><strong>Server port:</strong> cổng repomap mở trên máy build, mặc định 6969. Nếu cổng đang bận, tool báo ngay.</li>
         <li><strong>SSH host:</strong> tên hoặc IP bạn dùng để ssh vào máy build từ PC. Mặc định là tên đầy đủ của máy.</li>
         <li><strong>SSH user:</strong> tài khoản ssh của bạn, mặc định là user hiện tại.</li>
         <li><strong>SSH port:</strong> tool tự đọc từ <code>/etc/ssh/sshd_config</code>, không có thì dùng 22. Nếu khác 22, lệnh tunnel có thêm <code>-p</code>.</li>
@@ -434,11 +444,11 @@ Choose [1]:</pre></div>
       </ul>
       <p>Cấu hình được lưu vào <code>~/.config/repomap/config.ini</code> nên lần sau không phải nhập lại. Workspace quét lần trước cũng được nhớ, nên chọn <code>1. Run scan</code> chỉ cần bấm Enter.</p>
       <p>Tham số dòng lệnh luôn thắng file cấu hình: <code>--port</code>, <code>--host</code>, <code>--no-browser</code>, <code>--workers</code>. Dùng <code>--run</code> để bỏ qua menu, ví dụ trong script; khi không chạy trong terminal, tool cũng tự bỏ qua menu.</p>
-      <p class="sub">Có thể sửa file bằng tay; tạo file mẫu có chú thích bằng <code>repomap --init-config</code>. Thứ tự tìm file: <code>--config</code>, biến <code>$REPOMAP_CONFIG</code>, <code>./repomap.ini</code>, rồi <code>~/.config/repomap/config.ini</code>.</p>
+      <p class="sub">Có thể sửa file bằng tay; tạo file mẫu có chú thích bằng <code>repomap --init-config</code>. Thứ tự tìm file: <code>--config</code>, biến <code>$REPOMAP_CONFIG</code>, <code>./repomap.ini</code>, <code>repomap.ini</code> nằm cạnh <code>repomap.pyz</code> (file mà tab Deploy trên PC đẩy lên <code>~/.bin</code>), rồi <code>~/.config/repomap/config.ini</code>.</p>
     </div>
     <div class="cmd"><pre>[server]
 host = 127.0.0.1     <span class="c"># 0.0.0.0 mở cho cả mạng, không có mật khẩu</span>
-port = 8800
+port = 6969
 port_tries = 20
 open_browser = auto  <span class="c"># auto, yes hoặc no</span>
 

@@ -27,15 +27,31 @@ CÀI ĐẶT TRÊN MÁY BUILD LINUX
      Tool hiện menu:
        1. Run scan        quét và mở server
        2. Configuration   nhập port server và thông tin ssh (lưu lại cho lần sau)
+       3. Quick setup     dán lệnh ssh của server, ví dụ
+                            ssh -p <ssh_port> <user>@<host>.vbee.lge.com
+                          -> tự điền ssh host/user/port, port server = 6969
        0. Exit
 
 
-XEM GIAO DIỆN TỪ PC
+CÁCH NHANH NHẤT: DÙNG repomap TRÊN PC WINDOWS (cần Python 3.8+ trên PC)
+
+  1. Giải nén gói trên PC, nhấp đúp repomap-pc.cmd. Trình duyệt mở trang
+     http://127.0.0.1:6960 với 3 tab: Connect / Saved servers / Deploy to server.
+  2. Tab Connect -> Configuration -> Quick setup: dán lệnh ssh của server.
+  3. Tab Deploy to server -> Push to server: chép repomap.pyz + repomap.ini
+     vào ~/.bin trên server (gõ password trong cửa sổ ssh nếu được hỏi).
+  4. Trên server:  python3 ~/.bin/repomap.pyz ~/your_workspace_root  -> 1. Run scan
+  5. Trên PC: bấm Connect. Trang repomap tự mở khi server sẵn sàng.
+     Giữ cửa sổ ssh tunnel mở trong lúc dùng.
+
+
+XEM GIAO DIỆN TỪ PC BẰNG LỆNH
 
   Sau "1. Run scan", repomap in ra một lệnh dạng:
-       ssh -N -L 8800:127.0.0.1:8800 user@your_build_server
-  Chạy lệnh đó trên PC của bạn, giữ cửa sổ mở, rồi mở http://127.0.0.1:8800
+       ssh -N -L 6969:127.0.0.1:6969 user@your_build_server
+  Chạy lệnh đó trên PC của bạn, giữ cửa sổ mở, rồi mở http://127.0.0.1:6969
   Tên máy, user và port ssh trong lệnh chỉnh ở "2. Configuration".
+  Port nào đang bận, tool báo rõ và chuyển sang port kế tiếp.
   Giao diện có nút EN / VI cạnh ô tìm kiếm.
 
 

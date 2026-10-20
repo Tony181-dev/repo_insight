@@ -17,8 +17,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 from fixture import make_workspace  # noqa: E402
 from repomap.cli import apply_overrides, interactive, parse_args, resolve_settings  # noqa: E402
 from repomap.menu import run_menu  # noqa: E402
-from repomap.settings import (Settings, detect_ssh_port, load_settings, parse_sshd_ports,  # noqa: E402
-                              save_settings, write_template)
+from repomap.settings import (Settings, detect_ssh_port, load_settings, parse_ssh_command,  # noqa: E402
+                              parse_sshd_ports, save_settings, write_template)
+from repomap import local  # noqa: E402
 from repomap.arch import box_detail, build_arch, slim_arch  # noqa: E402
 from repomap.deepscan import deep_scan  # noqa: E402
 from repomap.fileview import file_lines, file_view, ver_match  # noqa: E402
@@ -333,7 +334,9 @@ class ReleaseTest(unittest.TestCase):
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'tools'))
         import make_release
         files = {n: (data, mode) for n, data, mode in make_release.release_files('9.9')}
-        self.assertEqual(set(files), {'repomap.pyz', 'install.sh', 'README.txt', 'HUONG_DAN.html', 'app.png'})
+        self.assertEqual(set(files), {'repomap.pyz', 'install.sh', 'repomap-pc.cmd', 'README.txt', 'HUONG_DAN.html',
+                                      'app.png'})
+        self.assertIn(b'\r\n', files['repomap-pc.cmd'][0])                 # cmd tren Windows can CRLF
         self.assertNotIn(b'\r', files['install.sh'][0])                     # sh tren Linux can LF
         self.assertEqual(files['install.sh'][1], 0o755)
         self.assertIn(b'repomap-9.9.tar.gz', files['README.txt'][0])
@@ -356,7 +359,7 @@ class SettingsTest(unittest.TestCase):
         with self.assertRaises(SystemExit):                    # khong ghi de
             write_template(self.path)
         s = load_settings(self.path)
-        self.assertEqual((s.host, s.port, s.open_browser, s.ssh_local_port), ('127.0.0.1', 8800, 'auto', 0))
+        self.assertEqual((s.host, s.port, s.open_browser, s.ssh_local_port), ('127.0.0.1', 6969, 'auto', 0))
         self.assertEqual(s.source, self.path)
 
     def test_values_and_cli_override(self):
@@ -393,6 +396,16 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual((back.port, back.ssh_host, back.ssh_user, back.ssh_port, back.ssh_local_port, back.workspace),
                          (9200, 'build.example.com', 'dev', 2200, 0, '/w/ws'))
 
+    def test_parse_ssh_command(self):
+        self.assertEqual(parse_ssh_command('ssh -p 56614 worker@hoang6-nguyen-hkmc.vbee.lge.com'),
+                         ('worker', 'hoang6-nguyen-hkmc.vbee.lge.com', 56614))
+        self.assertEqual(parse_ssh_command('  $ ssh worker@h.vbee.lge.com -p56614 '), ('worker', 'h.vbee.lge.com', 56614))
+        self.assertEqual(parse_ssh_command('ssh dev@build01'), ('dev', 'build01', 22))
+        self.assertEqual(parse_ssh_command('ssh -l dev -p 2200 build01'), ('dev', 'build01', 2200))
+        for bad in ('', 'ssh', 'ssh -p 99999 a@b', 'ssh build01', 'ssh a@b;rm'):
+            with self.assertRaises(ValueError):
+                parse_ssh_command(bad)
+
     def test_sshd_port_detection(self):
         self.assertEqual(parse_sshd_ports('#Port 22\nPort 2222\n  port 2200\nListenAddress 0.0.0.0\n'), [2222, 2200])
         cfg = os.path.join(self.tmp.name, 'sshd_config')
@@ -428,6 +441,28 @@ class MenuTest(unittest.TestCase):
                          (9300, 'build.example.com', 'dev', 2222, 0))
         self.assertIn('ssh -N -L 9300:127.0.0.1:9300 -p 2222 dev@build.example.com', '\n'.join(out))
 
+    def test_quick_setup(self):
+        answers = ['3', 'ssh nonsense', 'ssh -p 56614 worker@hoang6-nguyen-hkmc.vbee.lge.com', '0']
+        result, s, out = self.run_menu(answers)
+        self.assertIsNone(result)
+        text = '\n'.join(out)
+        self.assertIn('Please copy the SSH command', text)
+        self.assertIn('expected something like', text)                 # hoi lai khi dan sai
+        back = load_settings(self.cfg)
+        self.assertEqual((back.ssh_host, back.ssh_user, back.ssh_port, back.port, back.ssh_local_port),
+                         ('hoang6-nguyen-hkmc.vbee.lge.com', 'worker', 56614, 6969, 0))
+        self.assertIn('ssh -N -L 6969:127.0.0.1:6969 -p 56614 worker@hoang6-nguyen-hkmc.vbee.lge.com', text)
+
+    def test_quick_setup_cancel_and_busy_port(self):
+        with socket.socket() as busy:
+            busy.bind(('127.0.0.1', 0))
+            busy.listen(1)
+            port = busy.getsockname()[1]
+            result, s, out = self.run_menu(['2', str(port), 'h', 'u', '22', '', '3', '', '0'])
+        text = '\n'.join(out)
+        self.assertIn('port %d is already in use' % port, text)
+        self.assertIn('Cancelled', text)
+
     def test_run_scan_asks_for_workspace(self):
         ws = self.tmp.name
         result, _, out = self.run_menu(['', os.path.join(ws, 'nope'), ws])     # Enter = 1. Run scan
@@ -443,11 +478,98 @@ class MenuTest(unittest.TestCase):
         saved = Settings(source=self.cfg)
         s = apply_overrides(parse_args(['/ws', '--no-browser', '--port', '9999']), saved)
         self.assertEqual((s.open_browser, s.port), ('no', 9999))
-        self.assertEqual((saved.open_browser, saved.port), ('auto', 8800))   # ban luu khong bi doi
+        self.assertEqual((saved.open_browser, saved.port), ('auto', 6969))   # ban luu khong bi doi
 
     def test_no_menu_when_not_interactive(self):
         self.assertFalse(interactive(parse_args(['/ws', '--run'])))
         self.assertFalse(interactive(parse_args(['/ws', '--json', 'x'])))
+
+
+class LocalTest(unittest.TestCase):
+    CFG = {'host': 'h.vbee.lge.com', 'user': 'worker', 'port': '56614', 'srv': ''}
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.env = os.environ.get('XDG_CONFIG_HOME')
+        os.environ['XDG_CONFIG_HOME'] = self.tmp.name
+
+    def tearDown(self):
+        if self.env is None:
+            os.environ.pop('XDG_CONFIG_HOME', None)
+        else:
+            os.environ['XDG_CONFIG_HOME'] = self.env
+        self.tmp.cleanup()
+
+    def test_check_cfg(self):
+        self.assertEqual(local.check_cfg(self.CFG),
+                         {'host': 'h.vbee.lge.com', 'user': 'worker', 'port': 56614, 'srv': 6969})
+        for bad, word in (({'host': ''}, 'host'), ({'user': 'a b'}, 'user'), ({'port': 'x'}, 'SSH port'),
+                          ({'srv': '70000'}, 'local port'), ({'host': 'a&calc'}, 'host')):
+            with self.assertRaisesRegex(ValueError, word):
+                local.check_cfg(dict(self.CFG, **bad))
+
+    def test_commands_and_server_ini(self):
+        cfg = local.check_cfg(self.CFG)
+        self.assertEqual(local.tunnel_argv(cfg)[:4], ['ssh', '-N', '-L', '6969:127.0.0.1:6969'])
+        self.assertEqual(local.tunnel_argv(cfg)[-1], 'worker@h.vbee.lge.com')
+        argv = local.deploy_argv(cfg, '/tmp/x/.bin')
+        self.assertEqual(argv[:4], ['scp', '-r', '-P', '56614'])
+        self.assertEqual(argv[-2:], ['/tmp/x/.bin', 'worker@h.vbee.lge.com:'])
+        path = os.path.join(self.tmp.name, 'repomap.ini')
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(local.server_ini(cfg))
+        s = load_settings(path)
+        self.assertEqual(s.tunnel_hint(s.port), 'ssh -N -L 6969:127.0.0.1:6969 -p 56614 worker@h.vbee.lge.com')
+
+    def test_presets_max_and_overwrite(self):
+        jobs = local.Jobs()
+        for i in range(local.MAX_PRESETS):
+            local.post(jobs, 'preset', dict(self.CFG, name='s%d' % i))
+        local.post(jobs, 'preset', dict(self.CFG, name='s0', port='22'))         # trung ten -> ghi de
+        with self.assertRaisesRegex(ValueError, 'up to 5'):
+            local.post(jobs, 'preset', dict(self.CFG, name='s9'))
+        local.post(jobs, 'preset-del', {'name': 's1'})
+        local.post(jobs, 'config', self.CFG)
+        st = local.state(jobs)
+        self.assertEqual([p['name'] for p in st['presets']], ['s2', 's3', 's4', 's0'])
+        self.assertEqual(st['presets'][-1]['port'], 22)
+        self.assertEqual(st['config']['host'], 'h.vbee.lge.com')
+        self.assertEqual(local.post(jobs, 'quick', {'text': 'ssh -p 2 u@h'}),
+                         {'host': 'h', 'user': 'u', 'port': 2, 'srv': 6969})
+
+    def test_connect_refuses_busy_port(self):
+        with socket.socket() as busy:
+            busy.bind(('127.0.0.1', 0))
+            busy.listen(1)
+            port = busy.getsockname()[1]
+            with self.assertRaisesRegex(ValueError, 'Port %d on this PC is already in use' % port):
+                local.Jobs().connect(local.check_cfg(dict(self.CFG, srv=port)), open_browser=False)
+
+    def test_http_only_from_own_page(self):
+        from urllib.error import HTTPError
+        from urllib.request import Request
+        srv = local.Server(('127.0.0.1', 0), None)
+        port = srv.server_address[1]
+        srv.RequestHandlerClass = local.make_handler(local.Jobs(), port, False)[0]
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        try:
+            base = 'http://127.0.0.1:%d' % port
+            with urlopen(base + '/') as r:
+                self.assertIn(b'Saved servers', r.read())
+            with urlopen(base + '/api/local/state') as r:
+                self.assertEqual(json.load(r)['max'], 5)
+            body = json.dumps(dict(self.CFG, name='a')).encode()
+            ok = Request(base + '/api/local/preset', body, {'Content-Type': 'application/json', 'Origin': base})
+            with urlopen(ok) as r:
+                self.assertTrue(json.load(r)['ok'])
+            for headers in ({'Content-Type': 'application/json', 'Origin': 'http://evil.example'},
+                            {'Content-Type': 'text/plain'}):
+                with self.assertRaises(HTTPError) as e:
+                    urlopen(Request(base + '/api/local/preset', body, headers))
+                self.assertEqual(e.exception.code, 403)
+        finally:
+            srv.shutdown()
+            srv.server_close()
 
 
 if __name__ == '__main__':

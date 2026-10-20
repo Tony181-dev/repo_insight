@@ -96,8 +96,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outli
 #arch-links { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 3; }
 .arch-none { padding: 40px; text-align: center; }
 .band { display: grid; grid-template-columns: 180px 1fr; border: 1px solid; border-radius: 10px; }
-.band-hd { padding: 12px 14px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px;
-  justify-content: center; }
+.band-hd { padding: 12px 14px; border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+.band-title { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
 .band-hd b { color: var(--lc); font-size: 13.5px; line-height: 1.3; }
 .band-hd small { color: var(--mute); font-size: 11.5px; }
 .band-body { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px; align-items: flex-start; min-width: 0; }

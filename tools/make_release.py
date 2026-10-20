@@ -6,6 +6,7 @@
 Noi dung goi:
   repomap.pyz      tool (1 file, chay bang python3)
   install.sh       cai vao ~/.local/bin/repomap, khong can root
+  repomap-pc.cmd   tren PC Windows: nhap dup -> trang Connect / Saved servers / Deploy
   README.txt       huong dan nhanh
   HUONG_DAN.html   huong dan day du (+ app.png)
 
@@ -37,6 +38,10 @@ def lf(data):
     return data.replace(b'\r\n', b'\n')
 
 
+def crlf(data):
+    return lf(data).replace(b'\n', b'\r\n')
+
+
 MAINTAINER = re.compile(rb'<!-- maintainer:start.*?<!-- maintainer:end -->\n?', re.S)
 
 
@@ -55,6 +60,7 @@ def release_files(ver):
         files = [('repomap.pyz', read(pyz), 0o755)]
     files += [
         ('install.sh', lf(read(os.path.join(TOOLS, 'install.sh'))), 0o755),
+        ('repomap-pc.cmd', crlf(read(os.path.join(TOOLS, 'repomap-pc.cmd'))), 0o644),
         ('README.txt', lf(read(os.path.join(TOOLS, 'release_readme.txt'))).replace(b'{version}', ver.encode()), 0o644),
         ('HUONG_DAN.html', user_guide(), 0o644),
         ('app.png', read(os.path.join(DOCS, 'app.png')), 0o644),

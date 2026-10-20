@@ -8,11 +8,8 @@ File .pyz la file zip co dong shebang `#!/usr/bin/env python3`: tren Linux chay 
 """
 import argparse
 import os
-import shutil
 import subprocess
 import sys
-import tempfile
-import zipapp
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PKG = os.path.join(ROOT, 'repomap')
@@ -35,10 +32,9 @@ def run_tests():
 
 def build(out):
     os.makedirs(os.path.dirname(out), exist_ok=True)
-    with tempfile.TemporaryDirectory() as tmp:
-        shutil.copytree(PKG, os.path.join(tmp, 'repomap'), ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
-        zipapp.create_archive(tmp, out, interpreter='/usr/bin/env python3', main='repomap.cli:main', compressed=True)
-    return out
+    sys.path.insert(0, ROOT)
+    from repomap.local import build_pyz
+    return build_pyz(out)
 
 
 def main():

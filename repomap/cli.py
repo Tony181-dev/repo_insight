@@ -1,5 +1,6 @@
 """Dong lenh:
-  repomap [WORKSPACE]                 menu: 1. Run scan / 2. Configuration / 0. Exit
+  repomap [WORKSPACE]                 menu: 1. Run scan / 2. Configuration / 3. Quick setup / 0. Exit
+  repomap --local                     tren PC: giao dien Connect / Saved servers / Deploy (xem local.py)
   repomap WORKSPACE --run             bo qua menu, chay ngay (dung trong script)
   repomap WORKSPACE --json REPO       in JSON 1 repo roi thoat
 """
@@ -33,6 +34,8 @@ def parse_args(argv=None):
     ap.add_argument('--host', help='listen address (overrides [server] host); 0.0.0.0 = whole network, be careful')
     ap.add_argument('--no-browser', action='store_true', help='do not open a browser')
     ap.add_argument('--workers', type=int, help='threads used to classify repos')
+    ap.add_argument('--local', action='store_true',
+                    help='on your PC: open the Connect / Saved servers / Deploy page (needs ssh and scp)')
     ap.add_argument('--json', metavar='REPO', help='print insight + deep scan of one repo as JSON and exit')
     ap.add_argument('--version', action='version', version='repomap ' + __version__)
     return ap.parse_args(argv)
@@ -64,6 +67,9 @@ def serve(ws, s):
     port = srv.server_address[1]
     url = 'http://%s:%d/' % ('127.0.0.1' if s.host in ('0.0.0.0', '') else s.host, port)
     log('  config : %s' % (s.source or 'defaults (menu "2. Configuration" saves your settings)'))
+    if port != s.port:
+        log('  NOTE   : port %d is already in use on this machine, using port %d instead.' % (s.port, port))
+        log('           On your PC, set the port to %d (or stop whatever uses %d).' % (port, s.port))
     log('  UI     : %s   (Ctrl+C to stop)' % url)
     log('  From your PC: run this and keep it open, then browse http://127.0.0.1:%d/' % (s.ssh_local_port or port))
     log('    %s' % s.tunnel_hint(port))
@@ -81,6 +87,11 @@ def main(argv=None):
     a = parse_args(argv)
     if a.init_config is not None:
         print('written: ' + write_template(a.init_config or None))
+        return
+
+    if a.local:
+        from .local import run_local
+        run_local(a.port, not a.no_browser)
         return
 
     saved = load_settings(a.config)

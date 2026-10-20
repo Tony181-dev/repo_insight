@@ -107,7 +107,8 @@ function render() {
       vis.push(byId.get(sel));                         // khoi dang chon luon hien, du nam ngoai trang
     }
     h += `<section class="band" style="--lc:${c};border-color:${c}55;background:${c}0d">
-      <div class="band-hd"><b>${esc(layerName(L.id))}</b><small>${t('archCount', { b: boxes.length, c: comps })}</small>${
+      <div class="band-hd"><div class="band-title"><b>${esc(layerName(L.id))}</b>
+        <small>${t('archCount', { b: boxes.length, c: comps })}</small></div>${
         boxes.length > lim ? moreBtn(L.id, boxes.length - lim) : ''}</div>
       <div class="band-body">${vis.map(b => boxHtml(b, q)).join('')}</div></section>`;
   }
@@ -326,6 +327,16 @@ function clickBox(id) {
   select(id);
 }
 
+// thu gon tat ca = ve view mac dinh: dong moi khoi, bo chon, moi tang lai chi hien PAGE khoi, fit khung nhin
+function collapseAll() {
+  opened.clear();
+  sel = null;
+  for (const L in shown) delete shown[L];
+  render();
+  showInfo();
+  fit();
+}
+
 // ---------------------------------------------------------------- API
 
 async function load(force = false) {
@@ -390,7 +401,7 @@ export function initArch() {
   $('#arch-follow').addEventListener('click', () => setFollow(!follow));
   setFollow(follow);
   $('#arch-open').addEventListener('click', () => { data?.boxes.forEach(b => opened.add(b.id)); render(); });
-  $('#arch-close').addEventListener('click', () => { opened.clear(); sel = null; render(); showInfo(); });
+  $('#arch-close').addEventListener('click', collapseAll);
   let typing = 0;                                       // go loc: doi go xong moi ve lai (hang nghin khoi)
   Q.addEventListener('input', () => { clearTimeout(typing); typing = setTimeout(render, 180); });
   $('#arch-rescan').addEventListener('click', () => load(true));

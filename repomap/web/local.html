@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>repomap PC</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="local.css">
+</head>
+<body class="lp">
+  <header id="top">
+    <div class="logo"><i>&#9670;</i> repomap <span class="muted">PC</span></div>
+    <div id="ver" class="muted"></div>
+  </header>
+
+  <main class="lw">
+    <nav class="ltabs" role="tablist">
+      <button type="button" role="tab" data-tab="connect">Connect</button>
+      <button type="button" role="tab" data-tab="saved">Saved servers <span id="n-saved" class="muted"></span></button>
+      <button type="button" role="tab" data-tab="deploy">Deploy to server</button>
+    </nav>
+
+    <section id="tab-connect" class="ltab" role="tabpanel">
+      <div class="card">
+        <button type="button" class="cfg-hd" id="cfg-toggle" aria-expanded="false">
+          <i class="car">&#9656;</i><span class="dot" id="cfg-dot"></span><b>Configuration</b>
+          <span id="cfg-sum" class="muted"></span>
+        </button>
+        <div id="cfg-body" hidden>
+          <form id="cfg-form" class="fields" autocomplete="off">
+            <label>SSH host<input name="host" placeholder="your-host.vbee.lge.com" spellcheck="false"></label>
+            <label>SSH user<input name="user" placeholder="worker" spellcheck="false"></label>
+            <label>SSH port<input name="port" inputmode="numeric" placeholder="22"></label>
+            <label>Server &amp; local port<input name="srv" inputmode="numeric" placeholder="6969"></label>
+          </form>
+          <div id="cfg-msg" class="msg"></div>
+          <div class="links">
+            <button type="button" class="lnk" id="quick-toggle" aria-expanded="false">Quick setup</button>
+            <button type="button" class="lnk" id="save-toggle" aria-expanded="false">Save preset</button>
+          </div>
+          <div id="quick" class="sub" hidden>
+            <p>Please copy the SSH command for your vbee server and paste it here.</p>
+            <p class="muted">Example: <code>ssh -p &lt;ssh_port&gt; &lt;user&gt;@&lt;host&gt;.vbee.lge.com</code></p>
+            <div class="row">
+              <input id="quick-in" placeholder="ssh -p 56614 worker@your-host.vbee.lge.com" spellcheck="false">
+              <button type="button" class="pri" id="quick-go">Fill in</button>
+            </div>
+            <div id="quick-msg" class="msg"></div>
+          </div>
+          <div id="save" class="sub" hidden>
+            <div class="row">
+              <input id="save-name" placeholder="Server name" maxlength="40">
+              <button type="button" class="pri" id="save-go">Save</button>
+            </div>
+            <div id="save-msg" class="msg"></div>
+          </div>
+        </div>
+      </div>
+      <button type="button" class="pri big" id="connect">Connect</button>
+      <div id="conn-msg" class="msg"></div>
+      <div id="conn-cmd" class="cmdline"></div>
+    </section>
+
+    <section id="tab-saved" class="ltab" role="tabpanel" hidden>
+      <p class="muted" id="saved-hint"></p>
+      <div id="saved-list"></div>
+    </section>
+
+    <section id="tab-deploy" class="ltab" role="tabpanel" hidden>
+      <div class="card pad">
+        <p>Copies these files to <code id="dep-target">~/.bin</code> on the server (the folder is created if it is missing):</p>
+        <ul class="files">
+          <li><code>repomap.pyz</code> <span class="muted" id="dep-pyz"></span></li>
+          <li><code>repomap.ini</code> <span class="muted" id="dep-ini"></span></li>
+        </ul>
+        <button type="button" class="pri big" id="deploy">Push to server</button>
+        <div id="dep-msg" class="msg"></div>
+        <div id="dep-cmd" class="cmdline"></div>
+      </div>
+      <ol class="next">
+        <li>On the server: <code id="dep-run">python3 ~/.bin/repomap.pyz</code>, then choose <b>1. Run scan</b>.</li>
+        <li>Here: press <b>Connect</b>.</li>
+      </ol>
+    </section>
+  </main>
+  <script type="module" src="js/local.js"></script>
+</body>
+</html>
