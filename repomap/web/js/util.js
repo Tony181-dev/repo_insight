@@ -17,6 +17,19 @@ export async function api(endpoint, query = {}) {
   }
 }
 
+// API ghi (build script): header X-Repomap bat buoc, server tu choi request tu trang khac (guard.py)
+export async function post(endpoint, body) {
+  try {
+    const r = await fetch(`/api/${endpoint}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Repomap': '1' }, body: JSON.stringify(body) });
+    return await r.json();
+  } catch (e) {
+    return { error: String(e) };
+  }
+}
+
+export const SCRIPT = 'repomap_build_script.sh';
+
 export const KIND_COLOR = {
   'yocto-layer': '#f0a530', 'yocto-multi': '#e8862a', 'bitbake': '#ff6b3d', 'kernel': '#f05252',
   'u-boot': '#ec4899', 'android-device': '#2fbf71', 'android': '#9ad94a', 'qnx': '#3b82f6',

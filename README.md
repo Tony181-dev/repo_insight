@@ -95,6 +95,27 @@ File được tìm theo thứ tự: `--config` > `$REPOMAP_CONFIG` > `./repomap.
 | 2 | Bấm **Quét sâu** | Toàn bộ file (`git ls-files`), gom nhóm: recipe/bbappend/machine/image, Android.bp/.mk + module, defconfig/dts/Kconfig, QNX buildfile/variant, CMake/Meson/Make… |
 | 3 | Bấm file | Biến, module/target, tham chiếu đã resolve: `require/include/inherit`, `inherit-product`, `#include` dts và C/C++, `source` Kconfig, `add_subdirectory`, recipe ↔ bbappend, `SRC_URI` → repo trong manifest, Python `import`, GitLab CI `include`, Ansible role/`import_tasks`, Terraform module. Bấm tiếp để đi sâu. |
 | + | Bấm **Open full source** | Ở panel repo (cả repo) hoặc file (thư mục của module): cây thư mục nạp lười + nội dung có tô màu, tìm file theo tên, tìm nội dung (`git grep`), bấm tham chiếu để nhảy file. **← Back** (hoặc Esc / nút Back của trình duyệt) quay lại cây. |
+| + | Bấm **Create build script** | Ở panel repo: tạo `repomap_build_script.sh` ở gốc repo, đoán lệnh build theo loại module (xem dưới). File hiện thành node màu vàng đầu nhánh repo; bấm vào để sửa và **Save** (Ctrl+S) ngay trên giao diện, **Regenerate** để sinh lại. |
+
+### Build script
+
+`repomap_build_script.sh` là bản nháp, đoán từ những gì tool đọc được, không chạy gì khi tạo:
+
+| Module | Lệnh sinh ra | Tự tìm |
+|---|---|---|
+| Android | `source build/envsetup.sh` → `lunch` → `mmm <repo>` (repo device: `m`) | lunch target từ `COMMON_LUNCH_CHOICES` |
+| Yocto | `source <oe-init-build-env> <build>` → `bitbake <recipe>` | recipe có `SRC_URI` trỏ vào repo này, image của layer, thư mục build có sẵn |
+| Kernel / U-Boot | `make O=out ARCH=… <defconfig>` → `make` | arch và defconfig nếu chỉ có một |
+| QNX | `source qnxsdp-env.sh` → `make` | `~/qnx*/qnxsdp-env.sh` |
+| CMake, Meson, Bazel, Autotools, Cargo, Go, Gradle/Maven, npm, Python, Make, Docker | lệnh chuẩn | |
+
+Giá trị không tìm được để ở khối đầu file là `TODO`; script dừng với thông báo rõ nếu chưa điền. Cách build khác
+tìm thấy được ghi kèm ở cuối file (dạng comment). Tên file được thêm vào `.git/info/exclude` của repo nên không
+làm bẩn `git status`.
+
+Sửa/lưu file chỉ được phép khi server nghe `127.0.0.1` và request đến từ chính trang repomap của user đang chạy
+server (trên Linux kiểm tra cả user sở hữu kết nối, nên user khác trên máy build dùng chung không ghi được);
+xem `repomap/guard.py`. Khi chạy với `--host 0.0.0.0` thì chỉ xem.
 
 Python: đọc `pyproject.toml`/`setup.cfg`/`setup.py`/`requirements*.txt` (tên, version, phụ thuộc, package, test),
 `import` bằng `ast`. DevOps: Jenkins, GitLab CI, GitHub Actions, Docker/Compose, Ansible, Terraform, Helm.
@@ -115,6 +136,9 @@ repomap/
   insight_devops.py  thông tin nhanh Python + DevOps        (tầng 1)
   fileview.py    xem 1 file + resolve tham chiếu          (tầng 3)
   source.py      Open full source: liệt kê thư mục, tìm file / tìm nội dung
+  buildscript.py sinh / đọc / lưu repomap_build_script.sh của module
+  guard.py       ai được ghi file qua server (chỉ user chạy repomap, từ chính trang repomap)
+  local.py       chế độ PC (--local): Connect / Saved servers / Deploy
   parsers.py     parser BitBake/Make/Android.bp/Kconfig/DTS/CMake/QNX/C-C++
   parsers_py.py  parser Python (ast) + đọc TOML tối giản
   parsers_devops.py  parser YAML CI/Ansible/compose, Dockerfile, Jenkinsfile, Terraform

@@ -2,8 +2,10 @@ import contextlib
 import io
 import json
 import os
+import shutil
 import socket
 import struct
+import subprocess
 import sys
 import tempfile
 import threading
@@ -20,6 +22,7 @@ from repomap.menu import run_menu  # noqa: E402
 from repomap.settings import (Settings, detect_ssh_port, load_settings, parse_ssh_command,  # noqa: E402
                               parse_sshd_ports, save_settings, write_template)
 from repomap import local  # noqa: E402
+from repomap import buildscript, guard  # noqa: E402
 from repomap.arch import box_detail, build_arch, slim_arch  # noqa: E402
 from repomap.deepscan import deep_scan  # noqa: E402
 from repomap.fileview import file_lines, file_view, ver_match  # noqa: E402
@@ -483,6 +486,135 @@ class MenuTest(unittest.TestCase):
     def test_no_menu_when_not_interactive(self):
         self.assertFalse(interactive(parse_args(['/ws', '--run'])))
         self.assertFalse(interactive(parse_args(['/ws', '--json', 'x'])))
+
+
+# bash that chay duoc script (tren Windows bo qua: bash.exe trong System32 la WSL, co the chua cai distro)
+BASH = os.environ.get('REPOMAP_TEST_BASH') or (shutil.which('bash') if os.name != 'nt' else None)
+
+
+class BuildScriptTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.ws = Workspace(make_workspace(self.tmp.name), workers=4).load()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def gen(self, repo):
+        return buildscript.generate(self.ws, repo)
+
+    def test_generate_by_kind(self):
+        android = self.gen('device/acme/board')
+        self.assertIn('LUNCH_TARGET="acme-userdebug"', android)              # tu COMMON_LUNCH_CHOICES
+        self.assertIn('lunch "$LUNCH_TARGET"', android)
+        self.assertIn('# m libacme acmed', android)                          # module trong Android.bp: cach khac
+        yocto_src = self.gen('src/foo-app')
+        self.assertIn('RECIPES="foo"', yocto_src)                            # recipe co SRC_URI tro vao repo nay
+        self.assertIn('bitbake $RECIPES', yocto_src)
+        self.assertIn('# cmake --build build', yocto_src)                    # CMake van ghi kem
+        self.assertIn('OE_INIT="TODO"', yocto_src)
+        kernel = self.gen('kernel/linux')
+        self.assertIn('ARCH="arm64"', kernel)
+        self.assertIn('DEFCONFIG="acme_defconfig"', kernel)
+        self.assertNotIn('# Make:', kernel)                                  # Makefile kernel khong lap lai
+        self.assertIn('cmake -S . -B build', self.gen('apps/venc'))
+        self.assertIn('autoreconf -fi', self.gen('platform/hal/gk7205'))
+        self.assertIn('source_env "$QNX_ENV"', self.gen('qnx/drivers/spi'))
+        extra = self.gen('tools/extra')
+        self.assertIn('pip wheel', extra)
+        self.assertIn('# docker build -t extra .', extra)
+        self.assertIn('WS="$(cd "$MODULE/../.." && pwd)"', extra)
+        self.assertIn('did not recognise a build system', self.gen('device/acme/common'))
+
+    @unittest.skipUnless(BASH, 'needs bash')
+    def test_scripts_are_valid_bash_and_stop_on_todo(self):
+        for p in self.ws.repos:
+            r = buildscript.create_script(self.ws, p['path'])
+            path = buildscript.script_path(self.ws, p['path'])
+            check = subprocess.run([BASH, '-n', path], capture_output=True, text=True)
+            self.assertEqual(check.returncode, 0, p['path'] + ': ' + check.stderr)
+            self.assertTrue(r['text'].startswith('#!/usr/bin/env bash'))
+        run = subprocess.run([BASH, buildscript.script_path(self.ws, 'src/foo-app')], capture_output=True, text=True)
+        self.assertEqual(run.returncode, 2)
+        self.assertIn('Please set OE_INIT', run.stderr)
+
+    def test_create_save_and_git_exclude(self):
+        repo, ws = 'apps/venc', self.ws
+        d = ws.abs(repo)
+        has_git = shutil.which('git') is not None
+        if has_git:
+            subprocess.run(['git', 'init', '-q', d], check=True)
+        self.assertFalse(buildscript.has_script(ws, repo))
+        buildscript.create_script(ws, repo)
+        self.assertTrue(buildscript.has_script(ws, repo))
+        with self.assertRaisesRegex(ValueError, 'already exists'):
+            buildscript.create_script(ws, repo)
+        saved = buildscript.save_script(ws, repo, 'echo hi\r\n')
+        self.assertEqual(buildscript.read_script(ws, repo)['text'], 'echo hi\n')
+        self.assertTrue(saved['saved'])
+        self.assertIn('cmake', buildscript.create_script(ws, repo, overwrite=True)['text'])
+        with self.assertRaisesRegex(ValueError, 'too big'):
+            buildscript.save_script(ws, repo, 'x' * (buildscript.MAX_SIZE + 1))
+        if has_git:
+            with open(os.path.join(d, '.git', 'info', 'exclude')) as f:
+                self.assertEqual(f.read().count('/repomap_build_script.sh'), 1)     # them 1 lan
+            st = subprocess.run(['git', 'status', '--porcelain'], cwd=d, capture_output=True, text=True).stdout
+            self.assertNotIn('repomap_build_script.sh', st)
+
+    def test_server_api_and_guard(self):
+        from urllib.error import HTTPError
+        from urllib.request import Request
+        srv = start_server(self.ws, '127.0.0.1', 0)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        base = 'http://127.0.0.1:%d' % srv.server_address[1]
+        ok = {'Content-Type': 'application/json', 'X-Repomap': '1'}
+
+        def post(ep, body, headers=ok):
+            with urlopen(Request(base + '/api/' + ep, json.dumps(body).encode(), headers), timeout=10) as r:
+                return json.load(r)
+        try:
+            self.assertIsNone(json.load(urlopen(base + '/api/tree'))['noEdit'])
+            self.assertFalse(json.load(urlopen(base + '/api/insight?repo=apps/venc'))['script'])
+            self.assertIn('cmake', post('script-create', {'repo': 'apps/venc'})['text'])
+            self.assertTrue(json.load(urlopen(base + '/api/insight?repo=apps/venc'))['script'])
+            self.assertEqual(post('script-save', {'repo': 'apps/venc', 'text': 'make\n'})['text'], 'make\n')
+            self.assertEqual(json.load(urlopen(base + '/api/script?repo=apps/venc'))['text'], 'make\n')
+            for headers, code in (({'Content-Type': 'application/json'}, 403),                  # thieu X-Repomap
+                                  (dict(ok, Origin='http://evil.example'), 403),
+                                  (dict(ok, Host='evil.example:80'), 403)):                   # DNS rebinding
+                with self.assertRaises(HTTPError) as e:
+                    post('script-save', {'repo': 'apps/venc', 'text': 'rm -rf /'}, headers)
+                self.assertEqual(e.exception.code, code)
+            with self.assertRaises(HTTPError) as e:
+                post('script-save', {'repo': '../etc', 'text': 'x'})
+            self.assertEqual(e.exception.code, 404)
+            self.assertEqual(buildscript.read_script(self.ws, 'apps/venc')['text'], 'make\n')
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
+    def test_guard_peer_uid_and_network_host(self):
+        proc = os.path.join(self.tmp.name, 'tcp')
+        with open(proc, 'w') as f:            # client 127.0.0.1:0xC350 (50000) -> server :0x1B39 (6969), uid 1234
+            f.write('  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid\n'
+                    '   0: 0100007F:1B39 0100007F:C350 01 00000000:00000000 00:00000000 00000000  1000\n'
+                    '   1: 0100007F:C350 0100007F:1B39 01 00000000:00000000 00:00000000 00000000  1234\n')
+        self.assertEqual(guard.peer_uid(50000, 6969, (proc,)), 1234)
+        self.assertEqual(guard.peer_uid(50001, 6969, (proc,)), -1)            # doc duoc nhung khong thay
+        self.assertIsNone(guard.peer_uid(50000, 6969, (proc + '.missing',)))
+
+        class H:
+            def __init__(self, host, headers):
+                self.server = type('S', (), {'server_address': (host, 6969)})()
+                self.headers, self.client_address = headers, ('127.0.0.1', 50000)
+        good = {'Host': '127.0.0.1:7000', 'X-Repomap': '1'}             # port tren PC khac port server: van duoc
+        self.assertIn('network', guard.write_denied(H('0.0.0.0', good), (proc,)))
+        if hasattr(os, 'getuid'):
+            expect = None if os.getuid() == 1234 else 'does not belong'
+            res = guard.write_denied(H('127.0.0.1', good), (proc,))
+            self.assertTrue(res is None if expect is None else expect in res)
+        else:
+            self.assertIsNone(guard.write_denied(H('127.0.0.1', good), (proc,)))
 
 
 class LocalTest(unittest.TestCase):

@@ -2,7 +2,7 @@
 //
 // Kieu node: root | dir | repo | cat (nhom file) | file | more (nap them) | goto (nhay toi repo khac)
 
-import { store, tail } from './util.js';
+import { store, tail, SCRIPT } from './util.js';
 import { t, tl } from './i18n.js';
 
 export const BATCH = 40;   // so file hien moi lan trong 1 nhom
@@ -32,7 +32,7 @@ export function countLabel(n) {
 
 export const expandable = n =>
   n.children.length > 0 || n.type === 'cat' ||
-  (n.type === 'repo' && !n.ins) || (n.type === 'file' && !n.fv);
+  (n.type === 'repo' && !n.ins) || (n.type === 'file' && !n.fv && !n.script);
 
 export function visible(n, out = []) {
   out.push(n);
@@ -152,18 +152,30 @@ const catNode = (parent, grp, c) =>
   node({ type: 'cat', label: c.label, cid: c.id, grp, items: c.items, total: c.count }, parent);
 
 export function attachInsight(repo, ins) {
-  if (ins.error || !ins.keys.length) return;
-  const items = ins.keys.map(f => ({ f }));
-  const keys = catNode(repo, 'ins', { id: 'keys', label: 'key files', items, count: items.length });
-  keys.i18n = 'keyFilesCat';
-  repo.children.unshift(keys);
+  if (!ins.error && ins.keys.length) {
+    const items = ins.keys.map(f => ({ f }));
+    const keys = catNode(repo, 'ins', { id: 'keys', label: 'key files', items, count: items.length });
+    keys.i18n = 'keyFilesCat';
+    repo.children.unshift(keys);
+  }
+  if (ins.script) attachScript(repo);
 }
 
 export function attachDeep(repo, deep) {
   const kids = repo.children.filter(c => c.grp !== 'deep');
   if (deep.error) { repo.children = kids; return; }
   const cats = deep.cats.map(c => catNode(repo, 'deep', c));
-  repo.children = [...kids.filter(c => c.grp === 'ins'), ...cats, ...kids.filter(c => !c.grp)];
+  repo.children = [...kids.filter(c => c.grp === 'script' || c.grp === 'ins'), ...cats, ...kids.filter(c => !c.grp)];
+}
+
+// build script cua module (repomap_build_script.sh o goc repo): node file dau tien, to sang trong cay
+export function attachScript(repo) {
+  let n = repo.children.find(c => c.grp === 'script');
+  if (!n) {
+    n = node({ type: 'file', label: SCRIPT, f: SCRIPT, line: 0, grp: 'script', script: true }, repo);
+    repo.children.unshift(n);
+  }
+  return n;
 }
 
 export function attachRefs(file, fv) {

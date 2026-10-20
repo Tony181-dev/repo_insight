@@ -1,10 +1,10 @@
 // Dieu khien: bam node -> nap du lieu theo tang, tim kiem, toolbar, khoi dong.
 
-import { $, esc, api, KIND_COLOR, store } from './util.js';
+import { $, esc, api, post, KIND_COLOR, store } from './util.js';
 import { buildTree, visible, collapseAll, fillCat, loadMore, ensureChild,
-         attachInsight, attachDeep, attachRefs } from './tree.js';
+         attachInsight, attachDeep, attachRefs, attachScript } from './tree.js';
 import { initGraph, render, refresh, centerOn, fit, resetView } from './graph.js';
-import { showPanel, bindPanel, togglePanel } from './panel.js';
+import { showPanel, bindPanel, togglePanel, scriptDirty, scriptStatusRefresh } from './panel.js';
 import { t, applyStatic, setLang, onLangChange } from './i18n.js';
 import { initSource, openSource } from './source.js';
 import { initArch, showArch, hideArch, archRefresh, archFocusRepo } from './arch.js';
@@ -62,6 +62,13 @@ async function clickNode(n, fresh = false) {
       } else n.open = again ? !n.open : true;
       break;
     case 'file':
+      if (n.script) {                                     // build script: mo editor, nap lai neu chua co ban nhap
+        if (!n.sc || (!scriptDirty(n) && !fresh)) {
+          showPanel(n);
+          n.sc = await api('script', { repo: n.repo });
+        }
+        break;
+      }
       if (!n.fv) {
         showPanel(n);
         n.fv = await api('file', { repo: n.repo, f: n.f });
@@ -91,7 +98,49 @@ async function deepScan(n, btn) {
   if (store.sel === n) showPanel(n);
 }
 
+// ---------------------------------------------------------------- build script (repomap_build_script.sh)
+
+async function scriptAction(what, btn) {
+  const n = store.sel;
+  if (!n) return;
+  if (what === 'create' || what === 'open') {          // tu panel repo
+    n.scErr = '';
+    let sn = n.children.find(c => c.script);
+    if (what === 'create') {
+      btn.disabled = true;
+      btn.textContent = t('creating');
+      const r = await post('script-create', { repo: n.path });
+      if (r.error) { n.scErr = r.error; return showPanel(n, true); }
+      if (n.ins) n.ins.script = true;
+      sn = attachScript(n);
+      sn.sc = r;
+    }
+    sn = sn || attachScript(n);
+    n.open = true;
+    render();
+    return clickNode(sn, true);
+  }
+  if (!n.sc) return;
+  if (what === 'regen' && !confirm(t('regenAsk'))) return;
+  btn && (btn.disabled = true);
+  const text = n.sc.draft ?? n.sc.text;
+  const r = what === 'save' ? await post('script-save', { repo: n.repo, text })
+    : await post('script-create', { repo: n.repo, overwrite: true });
+  btn && (btn.disabled = false);
+  if (r.error) { n.sc.saveErr = r.error; return scriptStatusRefresh(n); }
+  const draft = what === 'save' && n.sc.draft !== text ? n.sc.draft : undefined;   // go tiep trong luc dang luu
+  n.sc = { ...r, draft };
+  if (what === 'regen') showPanel(n, true);
+  else scriptStatusRefresh(n);
+}
+
+addEventListener('beforeunload', e => {
+  const dirty = Object.values(store.byRepo).some(r => r.children.some(c => c.script && scriptDirty(c)));
+  if (dirty) { e.preventDefault(); e.returnValue = t('leaveAsk'); }
+});
+
 bindPanel({
+  script: scriptAction,
   deep: btn => deepScan(store.sel, btn),
   open: it => {
     const s = store.sel;

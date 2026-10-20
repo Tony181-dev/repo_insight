@@ -1,7 +1,7 @@
 // Panel chi tiet ben phai: hien thong tin node dang chon.
 // Cac link trong panel mang data-a="..." va duoc xu ly tap trung qua bindPanel().
 
-import { $, esc, colorOf, KIND_COLOR, tail, store } from './util.js';
+import { $, esc, colorOf, KIND_COLOR, tail, store, SCRIPT } from './util.js';
 import { t, tl } from './i18n.js';
 import { labelOf } from './tree.js';
 import { createCodeView } from './codeview.js';
@@ -60,7 +60,10 @@ function repoPanel(n) {
     + tags((n.r.tags.length ? n.r.tags : [n.kind]).map(k => tag(k, KIND_COLOR[k])))
     + `<div class="btns"><button class="pri" data-a="deep">${t(d ? 'rescan' : 'deepScan')}</button>
        <button data-a="copy" data-t="${esc(store.data.root + '/' + n.path)}">${t('copyPath')}</button>
-       ${srcButton(n.path, '')}</div>`;
+       ${srcButton(n.path, '')}
+       <button class="script-btn" data-a="${i?.script ? 'script-open' : 'script-create'}"${!i || (!i.script && store.data.noEdit)
+         ? ` disabled title="${esc(store.data.noEdit || '')}"` : ''}>${t(i?.script ? 'openScript' : 'createScript')}</button></div>`
+    + (n.scErr ? `<div class="err">${esc(n.scErr)}</div>` : '');
 
   if (!i) return h + `<div class="load">${t('reading')}</div>`;
   if (i.error) return h + `<div class="err">${esc(i.error)}</div>`;
@@ -124,9 +127,44 @@ function filePanel(n) {
   return h;
 }
 
+// build script cua module: editor sua / luu ngay tren giao dien (ban nhap giu trong n.sc.draft)
+export const scriptDirty = n => !!n.sc && n.sc.draft !== undefined && n.sc.draft !== n.sc.text;
+
+function scriptStatus(n) {
+  const s = n.sc;
+  if (s?.saveErr) return ['err', s.saveErr];
+  if (scriptDirty(n)) return ['dirty', t('unsaved')];
+  return ['', s?.saved ? t('savedAt', { t: s.saved }) : ''];
+}
+
+function scriptPanel(n) {
+  const s = n.sc, ro = store.data.noEdit;
+  let h = header(n, SCRIPT, `${n.repo}/${SCRIPT}`).replace(/background:[^"]+/, 'background:#f0b429')
+    + tags([tag(t('buildScript'), '#f0b429'),
+      store.byRepo[n.repo] ? `<a class="tag lnk" data-a="repo" data-p="${esc(n.repo)}">${t('openRepo')}</a>` : '']);
+  if (!s) return h + `<div class="load">${t('reading')}</div>`;
+  if (s.error) return h + `<div class="err">${esc(s.error)}</div>`;
+  const [cls, msg] = scriptStatus(n), off = ro ? ' disabled' : '';
+  return h + `<div class="btns"><button class="pri" data-a="script-save"${off}>${t('save')}</button>
+      <button data-a="script-regen"${off}>${t('regenerate')}</button>
+      <span class="sc-st ${cls}" id="sc-st">${esc(msg)}</span></div>
+    <div class="muted sc-hint">${ro ? esc(t('readOnly', { why: ro })) : t('scriptHint')}</div>
+    <textarea id="sc-ed" class="sc-ed" spellcheck="false" autocomplete="off"${ro ? ' readonly' : ''}>${
+      esc(s.draft ?? s.text)}</textarea>`;
+}
+
+export function scriptStatusRefresh(n) {
+  const el = P.querySelector('#sc-st');
+  if (!el || store.sel !== n) return;
+  const [cls, msg] = scriptStatus(n);
+  el.className = 'sc-st ' + cls;
+  el.textContent = msg;
+}
+
 // ---------------------------------------------------------------- API
 
-const RENDERERS = { root: dirPanel, dir: dirPanel, repo: repoPanel, cat: catPanel, file: filePanel };
+const RENDERERS = { root: dirPanel, dir: dirPanel, repo: repoPanel, cat: catPanel,
+  file: n => (n.script ? scriptPanel(n) : filePanel(n)) };
 
 let code = null;                // khung code cua file dang hien trong panel
 
@@ -163,7 +201,7 @@ export function showHtml(html) {
 
 export const togglePanel = () => P.classList.toggle('hide');
 
-// actions: { deep(btn), open(item), repo(path), cat(id), src({repo, base, file}) }
+// actions: { deep(btn), open(item), repo(path), cat(id), src({repo, base, file}), script(action, btn) }
 export function bindPanel(actions) {
   P.addEventListener('click', e => {
     const a = e.target.closest('[data-a]');
@@ -176,10 +214,27 @@ export function bindPanel(actions) {
       case 'cat': return actions.cat(d.c);
       case 'src': return actions.src({ repo: d.repo, base: d.base, file: d.f });
       case 'line': return goLine(+d.n);
+      case 'script-create': case 'script-open': case 'script-save': case 'script-regen':
+        return actions.script(d.a.slice(7), a);
       case 'copy': navigator.clipboard?.writeText(d.t); a.textContent = t('copied'); return;
     }
   });
+  P.addEventListener('keydown', e => {
+    if (e.target.id !== 'sc-ed') return;
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      actions.script('save', P.querySelector('[data-a="script-save"]'));
+    } else if (e.key === 'Tab' && !e.target.readOnly) {             // Tab trong editor: chen 2 dau cach
+      e.preventDefault();
+      document.execCommand('insertText', false, '  ');
+    }
+  });
   P.addEventListener('input', e => {
+    if (e.target.id === 'sc-ed') {
+      const n = store.sel;
+      if (n?.sc) { n.sc.draft = e.target.value; n.sc.saveErr = ''; scriptStatusRefresh(n); }
+      return;
+    }
     const sel = e.target.dataset.flt;
     if (!sel) return;
     const q = e.target.value.toLowerCase();

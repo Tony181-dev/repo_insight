@@ -48,7 +48,7 @@ function layout() {
 // ---------------------------------------------------------------- node SVG
 
 function draw(n) {
-  const g = el('g', { class: 'nd t-' + n.type });
+  const g = el('g', { class: 'nd t-' + n.type + (n.script ? ' script' : '') });
   const r = { repo: 6, more: 3, file: 4, goto: 4 }[n.type] || 5;
   const shape = n.type === 'cat' ? el('rect', { x: -5, y: -5, width: 10, height: 10, rx: 2 }) : el('circle', { r });
   shape.setAttribute('stroke', colorOf(n));

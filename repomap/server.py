@@ -9,6 +9,10 @@
   GET /api/search?repo=PATH&base=REL&q=TEXT&mode=name|text -> full source: tim file / tim noi dung
   GET /api/arch[?force=1]              -> kien truc tong: component theo tang (block view, ban gon)
   GET /api/archbox?id=BOX              -> chi tiet 1 khoi (file, phu thuoc cua tung component)
+  GET /api/script?repo=PATH            -> noi dung repomap_build_script.sh cua module
+  POST /api/script-create {repo, overwrite}  -> sinh script (buildscript.py)
+  POST /api/script-save   {repo, text}       -> luu script
+API ghi (POST) chi nhan tu chinh trang repomap cua user dang chay server: xem guard.py.
 """
 import json
 import mimetypes
@@ -20,8 +24,10 @@ from urllib.parse import parse_qs, urlparse
 
 from . import __version__
 from .arch import box_detail, build_arch, slim_arch
+from .buildscript import create_script, has_script, read_script, save_script
 from .deepscan import deep_scan
 from .fileview import file_lines, file_view
+from .guard import write_denied
 from .insight import insight
 from .source import list_dir, search
 
@@ -76,7 +82,7 @@ def make_handler(ws):
             repo, force = q.get('repo', ''), q.get('force') == '1'
             if ep == 'tree':
                 return self._send({'root': ws.root, 'mode': ws.mode, 'took': round(ws.took, 2),
-                                   'version': __version__, 'repos': ws.repos})
+                                   'version': __version__, 'repos': ws.repos, 'noEdit': write_denied(self, header=False)})
             if ep == 'arch':
                 full = ws.cached(('arch',), lambda: build_arch(ws, force), force)
                 return self._send(ws.cached(('arch-slim',), lambda: slim_arch(full), force))
@@ -85,7 +91,10 @@ def make_handler(ws):
             if repo not in ws.by_path and not (ep in ('file', 'lines', 'ls') and repo == ''):
                 return self._send({'error': 'no such repo: ' + repo}, code=404)
             if ep == 'insight':
-                return self._send(ws.cached(('insight', repo), lambda: insight(ws, repo), force))
+                ins = ws.cached(('insight', repo), lambda: insight(ws, repo), force)
+                return self._send(dict(ins, script=has_script(ws, repo)))
+            if ep == 'script':
+                return self._send(read_script(ws, repo))
             if ep == 'deep':
                 return self._send(ws.cached(('deep', repo), lambda: deep_scan(ws, repo), force))
             if ep == 'file':
@@ -97,6 +106,31 @@ def make_handler(ws):
             if ep == 'search':
                 return self._send(search(ws, repo, q.get('base', ''), q.get('q', ''), q.get('mode', 'name')))
             self._send({'error': 'unknown api: ' + ep}, code=404)
+
+        def do_POST(self):
+            # doc het body truoc khi tra loi: dong socket con du lieu chua doc -> client nhan RST thay vi loi
+            raw = self.rfile.read(min(int(self.headers.get('Content-Length') or 0), 1 << 20))
+            try:
+                denied = write_denied(self)
+                if denied:
+                    return self._send({'error': denied}, code=403)
+                if not self.headers.get('Content-Type', '').startswith('application/json'):
+                    return self._send({'error': 'expected JSON'}, code=415)
+                body = json.loads(raw or b'{}')
+                repo, ep = body.get('repo', ''), urlparse(self.path).path[len('/api/'):]
+                if repo not in ws.by_path:
+                    return self._send({'error': 'no such repo: ' + repo}, code=404)
+                if ep == 'script-create':
+                    return self._send(create_script(ws, repo, bool(body.get('overwrite'))))
+                if ep == 'script-save':
+                    return self._send(save_script(ws, repo, body.get('text', '')))
+                self._send({'error': 'unknown api: ' + ep}, code=404)
+            except ConnectionError:
+                pass
+            except ValueError as e:
+                self._send({'error': str(e)}, code=400)
+            except Exception as e:  # noqa: BLE001 - tra loi loi cho UI
+                self._send({'error': '%s: %s' % (type(e).__name__, e)}, code=500)
 
     return Handler
 
