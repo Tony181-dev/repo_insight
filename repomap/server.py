@@ -12,6 +12,9 @@
   GET /api/script?repo=PATH            -> noi dung repomap_build_script.sh cua module
   POST /api/script-create {repo, overwrite}  -> sinh script (buildscript.py)
   POST /api/script-save   {repo, text}       -> luu script
+  POST /api/build-start {repo} / build-stop {repo} -> chay / dung script (builds.py)
+  GET /api/build?repo=PATH&from=N      -> trang thai build + log tu byte N
+  GET /api/builds                      -> trang thai build cua moi module
 API ghi (POST) chi nhan tu chinh trang repomap cua user dang chay server: xem guard.py.
 """
 import json
@@ -24,6 +27,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import __version__
 from .arch import box_detail, build_arch, slim_arch
+from .builds import Builds
 from .buildscript import create_script, has_script, read_script, save_script
 from .deepscan import deep_scan
 from .fileview import file_lines, file_view
@@ -43,7 +47,7 @@ def load_asset(path):
         return None
 
 
-def make_handler(ws):
+def make_handler(ws, builds):
     class Handler(BaseHTTPRequestHandler):
         server_version = 'repomap/' + __version__
 
@@ -86,6 +90,8 @@ def make_handler(ws):
             if ep == 'arch':
                 full = ws.cached(('arch',), lambda: build_arch(ws, force), force)
                 return self._send(ws.cached(('arch-slim',), lambda: slim_arch(full), force))
+            if ep == 'builds':
+                return self._send(builds.summary())
             if ep == 'archbox':
                 return self._send(box_detail(ws.cached(('arch',), lambda: build_arch(ws)), q.get('id', '')))
             if repo not in ws.by_path and not (ep in ('file', 'lines', 'ls') and repo == ''):
@@ -95,6 +101,8 @@ def make_handler(ws):
                 return self._send(dict(ins, script=has_script(ws, repo)))
             if ep == 'script':
                 return self._send(read_script(ws, repo))
+            if ep == 'build':
+                return self._send(builds.status(repo, q.get('from', 0)))
             if ep == 'deep':
                 return self._send(ws.cached(('deep', repo), lambda: deep_scan(ws, repo), force))
             if ep == 'file':
@@ -124,6 +132,10 @@ def make_handler(ws):
                     return self._send(create_script(ws, repo, bool(body.get('overwrite'))))
                 if ep == 'script-save':
                     return self._send(save_script(ws, repo, body.get('text', '')))
+                if ep == 'build-start':
+                    return self._send(builds.start(repo))
+                if ep == 'build-stop':
+                    return self._send(builds.stop(repo))
                 self._send({'error': 'unknown api: ' + ep}, code=404)
             except ConnectionError:
                 pass
@@ -145,10 +157,13 @@ class Server(ThreadingHTTPServer):
 
 def start_server(ws, host='127.0.0.1', port=6969, tries=20):
     """Mo server o cong trong dau tien trong [port, port+tries)."""
-    handler = make_handler(ws)
+    builds = Builds(ws)
+    handler = make_handler(ws, builds)
     for p in range(port, port + tries):
         try:
-            return Server((host, p), handler)
+            srv = Server((host, p), handler)
         except OSError:
             continue
+        srv.builds = builds                     # cli dung moi build khi server dung
+        return srv
     raise SystemExit('cannot open any port in %d..%d' % (port, port + tries - 1))

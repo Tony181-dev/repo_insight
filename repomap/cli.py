@@ -8,6 +8,7 @@ import argparse
 import dataclasses
 import json
 import os
+import signal
 import sys
 import threading
 import webbrowser
@@ -75,12 +76,25 @@ def serve(ws, s):
     log('    %s' % s.tunnel_hint(port))
     if s.should_open_browser():
         threading.Timer(0.5, lambda: webbrowser.open(url)).start()
+    stop_on_signals()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
         log('\nbye')
     finally:
+        stopped = srv.builds.stop_all()            # build chay tu giao dien dung cung repomap
+        if stopped:
+            log('  stopped %d running build(s): %s' % (len(stopped), ', '.join(r or '.' for r in stopped)))
         srv.server_close()
+
+
+def stop_on_signals():
+    """SIGTERM / SIGHUP (vd phien ssh chay repomap bi dut) xu ly nhu Ctrl+C: dung build roi thoat."""
+    def stop(*_):
+        raise KeyboardInterrupt
+    for name in ('SIGTERM', 'SIGHUP'):
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), stop)
 
 
 def main(argv=None):

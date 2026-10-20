@@ -1,4 +1,4 @@
-"""Ai duoc ghi file / chay lenh qua server (build script).
+"""Ai duoc ghi file / chay lenh qua server (build script: luu, chay, dung).
 
 Server mac dinh chi doc. Cac API ghi chi nhan request khi:
   - server nghe 127.0.0.1 (khong mo ra mang)

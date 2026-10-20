@@ -113,7 +113,20 @@ Giá trị không tìm được để ở khối đầu file là `TODO`; script 
 tìm thấy được ghi kèm ở cuối file (dạng comment). Tên file được thêm vào `.git/info/exclude` của repo nên không
 làm bẩn `git status`.
 
-Sửa/lưu file chỉ được phép khi server nghe `127.0.0.1` và request đến từ chính trang repomap của user đang chạy
+**▶ Run build** (trong editor của script) chạy file đó trên máy build bằng `bash -l` (lưu bản đang sửa trước),
+log hiện trực tiếp bên dưới; node script nhấp nháy trong cây khi đang build. Mỗi module chạy một build một lúc.
+
+| Khi nào | Build |
+|---|---|
+| Bấm **■ Stop** | Dừng cả nhóm tiến trình (SIGTERM, sau 10 giây SIGKILL) |
+| Tắt repomap: Ctrl+C, `kill`, phiên ssh chạy repomap bị đứt (SIGHUP) | Dừng theo |
+| repomap bị `kill -9` | Linux: bash bảo vệ nhận SIGTERM (`PR_SET_PDEATHSIG`) và dừng cả nhóm |
+| Trình duyệt / ssh tunnel mất kết nối, đóng tab | **Vẫn chạy**. Giao diện báo mất kết nối và tự thử lại; nối lại thì đọc tiếp log từ chỗ đang dở |
+
+Log của lần chạy gần nhất: `~/.cache/repomap/builds-<hash>/<repo>.log` (hoặc `$REPOMAP_CACHE_DIR`). Script chạy không có
+stdin, nên lệnh cần nhập (vd `sudo` hỏi mật khẩu) sẽ lỗi thay vì treo. `REPOMAP_BASH` chọn bash khác nếu cần.
+
+Sửa/lưu/chạy file chỉ được phép khi server nghe `127.0.0.1` và request đến từ chính trang repomap của user đang chạy
 server (trên Linux kiểm tra cả user sở hữu kết nối, nên user khác trên máy build dùng chung không ghi được);
 xem `repomap/guard.py`. Khi chạy với `--host 0.0.0.0` thì chỉ xem.
 
@@ -137,6 +150,7 @@ repomap/
   fileview.py    xem 1 file + resolve tham chiếu          (tầng 3)
   source.py      Open full source: liệt kê thư mục, tìm file / tìm nội dung
   buildscript.py sinh / đọc / lưu repomap_build_script.sh của module
+  builds.py      chạy / dừng script đó, log build; dừng theo repomap
   guard.py       ai được ghi file qua server (chỉ user chạy repomap, từ chính trang repomap)
   local.py       chế độ PC (--local): Connect / Saved servers / Deploy
   parsers.py     parser BitBake/Make/Android.bp/Kconfig/DTS/CMake/QNX/C-C++

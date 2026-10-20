@@ -8,6 +8,7 @@ import { showPanel, bindPanel, togglePanel, scriptDirty, scriptStatusRefresh } f
 import { t, applyStatic, setLang, onLangChange } from './i18n.js';
 import { initSource, openSource } from './source.js';
 import { initArch, showArch, hideArch, archRefresh, archFocusRepo } from './arch.js';
+import { initBuild, poll as pollBuild, startBuild, stopBuild } from './build.js';
 
 // ---------------------------------------------------------------- chon / mo node
 
@@ -67,7 +68,11 @@ async function clickNode(n, fresh = false) {
           showPanel(n);
           n.sc = await api('script', { repo: n.repo });
         }
-        break;
+        render();
+        centerOn(n, true);
+        if (store.sel !== n) return;
+        showPanel(n);
+        return pollBuild(n, !n.bd || n.bd.state !== 'running');   // trang thai + log build (lan dau: phan cuoi log)
       }
       if (!n.fv) {
         showPanel(n);
@@ -121,6 +126,7 @@ async function scriptAction(what, btn) {
     return clickNode(sn, true);
   }
   if (!n.sc) return;
+  if (what === 'run' || what === 'stop') return runAction(n, what, btn);
   if (what === 'regen' && !confirm(t('regenAsk'))) return;
   btn && (btn.disabled = true);
   const text = n.sc.draft ?? n.sc.text;
@@ -132,6 +138,19 @@ async function scriptAction(what, btn) {
   n.sc = { ...r, draft };
   if (what === 'regen') showPanel(n, true);
   else scriptStatusRefresh(n);
+}
+
+// Chay: luu ban nhap truoc (chay dung cai dang thay tren man hinh). Dung: hoi lai cho chac.
+async function runAction(n, what, btn) {
+  if (what === 'stop' && !confirm(t('stopAsk'))) return;
+  btn.disabled = true;
+  let r = {};
+  if (what === 'run' && scriptDirty(n)) await scriptAction('save', null);
+  if (what === 'run' && n.sc.saveErr) r = { error: n.sc.saveErr };
+  else r = what === 'run' ? await startBuild(n) : await stopBuild(n);
+  btn.disabled = false;
+  if (r.error) { n.bd = { ...(n.bd || { text: '', next: 0 }), error: r.error }; }
+  if (store.sel === n) showPanel(n, true);
 }
 
 addEventListener('beforeunload', e => {
@@ -274,6 +293,7 @@ onLangChange(() => {
   showPanel(store.root);
   initSource();
   initArch();
+  initBuild(() => render());
   setView('tree');
   if (history.state && history.state.src) openSource(history.state.src, { push: false });   // tai lai trang khi dang xem source
 })();

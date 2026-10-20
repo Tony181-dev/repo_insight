@@ -5,6 +5,7 @@ import { $, esc, colorOf, KIND_COLOR, tail, store, SCRIPT } from './util.js';
 import { t, tl } from './i18n.js';
 import { labelOf } from './tree.js';
 import { createCodeView } from './codeview.js';
+import { statusText } from './build.js';
 
 const P = $('#panel');
 
@@ -145,12 +146,21 @@ function scriptPanel(n) {
   if (!s) return h + `<div class="load">${t('reading')}</div>`;
   if (s.error) return h + `<div class="err">${esc(s.error)}</div>`;
   const [cls, msg] = scriptStatus(n), off = ro ? ' disabled' : '';
+  const bd = n.bd, running = bd?.state === 'running', [bcls, bmsg] = statusText(bd), log = bd?.text || '';
   return h + `<div class="btns"><button class="pri" data-a="script-save"${off}>${t('save')}</button>
       <button data-a="script-regen"${off}>${t('regenerate')}</button>
-      <span class="sc-st ${cls}" id="sc-st">${esc(msg)}</span></div>
-    <div class="muted sc-hint">${ro ? esc(t('readOnly', { why: ro })) : t('scriptHint')}</div>
-    <textarea id="sc-ed" class="sc-ed" spellcheck="false" autocomplete="off"${ro ? ' readonly' : ''}>${
-      esc(s.draft ?? s.text)}</textarea>`;
+      <span class="sc-st ${cls}" id="sc-st">${esc(msg)}</span>
+      <span class="grow"></span>
+      <button class="run-btn" data-a="script-run"${off}${running ? ' hidden' : ''}
+        title="${esc(t('runHint'))}">${t('runBuild')}</button>
+      <button class="stop-btn" data-a="script-stop"${off}${running ? '' : ' hidden'}>${t('stopBuild')}</button></div>
+    <div class="muted sc-hint">${ro ? esc(t('readOnly', { why: ro })) : t('scriptHint')}
+      <span class="bd-st ${bcls}" id="bd-st">${esc(bmsg)}</span></div>
+    ${bd?.error ? `<div class="err">${esc(bd.error)}</div>` : ''}
+    <textarea id="sc-ed" class="sc-ed${log ? ' with-log' : ''}" spellcheck="false" autocomplete="off"${
+      ro ? ' readonly' : ''}>${esc(s.draft ?? s.text)}</textarea>
+    <h4 id="bd-hd"${log ? '' : ' hidden'}>${t('buildLog')}</h4>
+    <pre id="bd-log" class="bd-log"${log ? '' : ' hidden'}>${esc(log)}</pre>`;
 }
 
 export function scriptStatusRefresh(n) {
@@ -215,6 +225,7 @@ export function bindPanel(actions) {
       case 'src': return actions.src({ repo: d.repo, base: d.base, file: d.f });
       case 'line': return goLine(+d.n);
       case 'script-create': case 'script-open': case 'script-save': case 'script-regen':
+      case 'script-run': case 'script-stop':
         return actions.script(d.a.slice(7), a);
       case 'copy': navigator.clipboard?.writeText(d.t); a.textContent = t('copied'); return;
     }

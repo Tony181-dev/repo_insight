@@ -22,7 +22,7 @@ from repomap.menu import run_menu  # noqa: E402
 from repomap.settings import (Settings, detect_ssh_port, load_settings, parse_ssh_command,  # noqa: E402
                               parse_sshd_ports, save_settings, write_template)
 from repomap import local  # noqa: E402
-from repomap import buildscript, guard  # noqa: E402
+from repomap import builds, buildscript, guard  # noqa: E402
 from repomap.arch import box_detail, build_arch, slim_arch  # noqa: E402
 from repomap.deepscan import deep_scan  # noqa: E402
 from repomap.fileview import file_lines, file_view, ver_match  # noqa: E402
@@ -615,6 +615,122 @@ class BuildScriptTest(unittest.TestCase):
             self.assertTrue(res is None if expect is None else expect in res)
         else:
             self.assertIsNone(guard.write_denied(H('127.0.0.1', good), (proc,)))
+
+
+@unittest.skipUnless(BASH, 'needs bash')
+class BuildRunTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        os.environ['REPOMAP_BASH'] = BASH
+        os.environ['REPOMAP_CACHE_DIR'] = os.path.join(self.tmp.name, 'cache')
+        self.ws = Workspace(make_workspace(os.path.join(self.tmp.name, 'ws')), workers=4).load()
+        self.runs = builds.Builds(self.ws)
+
+    def tearDown(self):
+        self.runs.stop_all()
+        os.environ.pop('REPOMAP_BASH', None)
+        for _ in range(30):                     # Windows: tien trinh vua bi dung con giu file log mot chut
+            try:
+                shutil.rmtree(self.tmp.name)
+                break
+            except OSError:
+                time.sleep(0.2)
+        with contextlib.suppress(OSError):      # thu muc da xoa o tren (Python 3.8 bao loi neu khong con)
+            self.tmp.cleanup()
+
+    def script(self, text, repo='apps/venc'):
+        buildscript.save_script(self.ws, repo, text)
+        return repo
+
+    def wait(self, repo, timeout=20):
+        end = time.time() + timeout
+        while self.runs.status(repo)['state'] == 'running' and time.time() < end:
+            time.sleep(0.1)
+        return self.runs.status(repo)
+
+    def test_run_log_and_exit_codes(self):
+        repo = self.script('echo "hello from $(basename "$PWD")"\nfor i in 1 2 3; do echo line $i; done\n')
+        self.assertEqual(self.runs.start(repo)['state'], 'running')
+        st = self.wait(repo)
+        self.assertEqual((st['state'], st['code']), ('done', 0))
+        self.assertIn('hello from venc', st['log'])                       # chay tu thu muc module
+        self.assertIn('line 3', st['log'])
+        self.assertIn('[repomap] done, exit code 0', st['log'])
+        tail = self.runs.status(repo, offset=st['next'])                  # doc tiep: khong con gi moi
+        self.assertEqual(tail['log'], '')
+        self.assertEqual(self.runs.status(repo, offset=-1)['log'], st['log'])    # -1 = phan cuoi
+        self.script('echo boom\nexit 3\n')
+        self.runs.start(repo)
+        st = self.wait(repo)
+        self.assertEqual((st['state'], st['code']), ('failed', 3))
+        self.assertNotIn('line 3', st['log'])                             # log moi ghi de log cu
+        self.assertEqual(self.runs.status('kernel/linux')['state'], 'idle')
+        with self.assertRaisesRegex(ValueError, 'create it first'):
+            self.runs.start('kernel/linux')
+
+    def test_stop_kills_the_whole_build(self):
+        pidfile = os.path.join(self.tmp.name, 'child.pid')
+        # Windows (Git Bash / Cygwin): tien trinh nen khong nam trong cay tien trinh Windows -> chi thu lenh tien canh
+        body = 'echo started\nsleep 60\n' if os.name == 'nt' else 'sleep 60 &\necho $! > "%s"\necho started\nwait\n'
+        repo = self.script(body if os.name == 'nt' else body % pidfile)
+        self.runs.start(repo)
+        with self.assertRaisesRegex(ValueError, 'already running'):
+            self.runs.start(repo)
+        end = time.time() + 10
+        while 'started' not in self.runs.status(repo)['log'] and time.time() < end:
+            time.sleep(0.1)
+        self.assertEqual(self.runs.stop(repo, wait=True)['state'], 'stopped')
+        st = self.wait(repo)
+        self.assertEqual(st['state'], 'stopped')
+        if os.name != 'nt':                                               # tien trinh con (sleep) cung bi dung
+            with open(pidfile) as f:
+                child = int(f.read())
+            time.sleep(0.3)
+            with self.assertRaises(ProcessLookupError):
+                os.kill(child, 0)
+
+    def test_build_outlives_the_thread_that_started_it(self):
+        # nhu luong xu ly request HTTP: bat dau build roi ket thuc ngay. Linux: PR_SET_PDEATHSIG gan voi luong tao
+        # tien trinh con, nen neu tao build tu luong nay thi build bi giet ngay khi luong ket thuc
+        repo = self.script('sleep 1\necho survived\n')
+        t = threading.Thread(target=self.runs.start, args=(repo,))
+        t.start()
+        t.join()
+        st = self.wait(repo)
+        self.assertEqual((st['state'], st['code']), ('done', 0))
+        self.assertIn('survived', st['log'])
+
+    def test_stop_all_when_repomap_stops(self):
+        repo = self.script('sleep 60\n')
+        self.runs.start(repo)
+        self.assertEqual(self.runs.stop_all(), [repo])
+        self.assertEqual(self.wait(repo)['state'], 'stopped')
+        self.assertEqual(self.runs.summary()[repo]['state'], 'stopped')
+
+    def test_server_build_api(self):
+        from urllib.error import HTTPError
+        from urllib.request import Request
+        self.script('echo via-api\n')
+        srv = start_server(self.ws, '127.0.0.1', 0)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        base = 'http://127.0.0.1:%d/api/' % srv.server_address[1]
+        try:
+            body = json.dumps({'repo': 'apps/venc'}).encode()
+            with self.assertRaises(HTTPError) as e:                       # thieu header X-Repomap
+                urlopen(Request(base + 'build-start', body, {'Content-Type': 'application/json'}))
+            self.assertEqual(e.exception.code, 403)
+            req = Request(base + 'build-start', body, {'Content-Type': 'application/json', 'X-Repomap': '1'})
+            self.assertEqual(json.load(urlopen(req))['state'], 'running')
+            end = time.time() + 20
+            while json.load(urlopen(base + 'builds'))['apps/venc']['state'] == 'running' and time.time() < end:
+                time.sleep(0.1)
+            st = json.load(urlopen(base + 'build?repo=apps/venc&from=0'))
+            self.assertEqual(st['state'], 'done')
+            self.assertIn('via-api', st['log'])
+        finally:
+            srv.builds.stop_all()
+            srv.shutdown()
+            srv.server_close()
 
 
 class LocalTest(unittest.TestCase):
