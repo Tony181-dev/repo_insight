@@ -6,7 +6,7 @@
 Noi dung goi:
   repomap.pyz      tool (1 file, chay bang python3)
   install.sh       cai vao ~/.local/bin/repomap, khong can root
-  repomap-pc.cmd   tren PC Windows: nhap dup -> trang Connect / Saved servers / Deploy
+  repomap-pc.cmd   tren PC Windows: nhap dup -> Connect (co Deploy) / Saved servers
   README.txt       huong dan nhanh
   HUONG_DAN.html   huong dan day du (+ app.png)
 

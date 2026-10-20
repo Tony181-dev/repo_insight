@@ -1,6 +1,6 @@
 """Dong lenh:
   repomap [WORKSPACE]                 menu: 1. Run scan / 2. Configuration / 3. Quick setup / 0. Exit
-  repomap --local                     tren PC: giao dien Connect / Saved servers / Deploy (xem local.py)
+  repomap --local                     tren PC: Connect (co Deploy) / Saved servers (xem local.py)
   repomap WORKSPACE --run             bo qua menu, chay ngay (dung trong script)
   repomap WORKSPACE --json REPO       in JSON 1 repo roi thoat
 """
@@ -36,7 +36,7 @@ def parse_args(argv=None):
     ap.add_argument('--no-browser', action='store_true', help='do not open a browser')
     ap.add_argument('--workers', type=int, help='threads used to classify repos')
     ap.add_argument('--local', action='store_true',
-                    help='on your PC: open the Connect / Saved servers / Deploy page (needs ssh and scp)')
+                    help='on your PC: open the Connect / Saved servers page (Deploy is in Connect; needs ssh and scp)')
     ap.add_argument('--json', metavar='REPO', help='print insight + deep scan of one repo as JSON and exit')
     ap.add_argument('--version', action='version', version='repomap ' + __version__)
     return ap.parse_args(argv)
@@ -82,9 +82,10 @@ def serve(ws, s):
     except KeyboardInterrupt:
         log('\nbye')
     finally:
-        stopped = srv.builds.stop_all()            # build chay tu giao dien dung cung repomap
+        stopped = srv.builds.stop_all()            # script chay tu giao dien dung cung repomap
         if stopped:
-            log('  stopped %d running build(s): %s' % (len(stopped), ', '.join(r or '.' for r in stopped)))
+            log('  stopped %d running script(s): %s' % (len(stopped), ', '.join(
+                '%s/%s' % (r or '.', s) for r, s in stopped)))
         srv.server_close()
 
 

@@ -1,4 +1,4 @@
-// Trang PC (repomap --local): Connect (cau hinh + mo tunnel), Saved servers (toi da 5 preset), Deploy (scp len ~/.bin).
+// Trang PC (repomap --local): Connect (cau hinh, deploy + mo tunnel), Saved servers (toi da 5 preset).
 // Server local lam phan ssh/scp (mo cua so console de nhap password); trang nay chi goi /api/local/* va poll trang thai.
 
 import { $, esc } from './util.js';
@@ -112,9 +112,7 @@ function renderDeploy() {
   const c = cfg(), dir = st?.remoteDir || '.bin';
   $('#dep-target').textContent = ready() ? `${c.user}@${c.host}:~/${dir}` : `~/${dir}`;
   $('#dep-run').textContent = `python3 ~/${dir}/repomap.pyz`;
-  $('#dep-pyz').textContent = `the tool${st ? `, version ${st.version}` : ''}`;
-  $('#dep-ini').textContent = ready() ? `SSH ${target(c)}, port ${c.srv || st?.defaultPort}`
-    : 'your Configuration (set it up in Connect first)';
+  $('#dep-pyz').textContent = st ? ` (v${st.version})` : '';
 }
 
 // ---------------------------------------------------------------- trang thai tunnel / deploy
@@ -157,7 +155,7 @@ async function refresh() {
 
 async function run(ep, btn, msg) {
   if (!checkCfg()) {
-    if (ep === 'deploy') return say(msg, 'bad', 'Set up the Configuration in the Connect tab first.');
+    if (ep === 'deploy') say(msg, 'bad', 'Set up the Configuration above first.');
     return toggle($('#cfg-toggle'), $('#cfg-body'), true);
   }
   btn.disabled = true;

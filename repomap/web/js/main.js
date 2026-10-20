@@ -1,14 +1,14 @@
 // Dieu khien: bam node -> nap du lieu theo tang, tim kiem, toolbar, khoi dong.
 
-import { $, esc, api, post, KIND_COLOR, store } from './util.js';
+import { $, esc, api, post, KIND_COLOR, store, SCRIPT } from './util.js';
 import { buildTree, visible, collapseAll, fillCat, loadMore, ensureChild,
-         attachInsight, attachDeep, attachRefs, attachScript } from './tree.js';
+         attachInsight, attachDeep, attachRefs, attachScript, attachUserScript } from './tree.js';
 import { initGraph, render, refresh, centerOn, fit, resetView } from './graph.js';
-import { showPanel, bindPanel, togglePanel, scriptDirty, scriptStatusRefresh } from './panel.js';
+import { showPanel, bindPanel, togglePanel, initPanelResizer, resetPanelSize, scriptDirty, scriptStatusRefresh } from './panel.js';
 import { t, applyStatic, setLang, onLangChange } from './i18n.js';
 import { initSource, openSource } from './source.js';
 import { initArch, showArch, hideArch, archRefresh, archFocusRepo } from './arch.js';
-import { initBuild, poll as pollBuild, startBuild, stopBuild } from './build.js';
+import { initBuild, poll as pollBuild, startBuild, stopBuild, clearBuildLog } from './build.js';
 
 // ---------------------------------------------------------------- chon / mo node
 
@@ -66,7 +66,7 @@ async function clickNode(n, fresh = false) {
       if (n.script) {                                     // build script: mo editor, nap lai neu chua co ban nhap
         if (!n.sc || (!scriptDirty(n) && !fresh)) {
           showPanel(n);
-          n.sc = await api('script', { repo: n.repo });
+          n.sc = await api('script', { repo: n.repo, name: n.scriptName || SCRIPT });
         }
         render();
         centerOn(n, true);
@@ -110,7 +110,7 @@ async function scriptAction(what, btn) {
   if (!n) return;
   if (what === 'create' || what === 'open') {          // tu panel repo
     n.scErr = '';
-    let sn = n.children.find(c => c.script);
+    let sn = n.children.find(c => c.buildScript);
     if (what === 'create') {
       btn.disabled = true;
       btn.textContent = t('creating');
@@ -125,12 +125,62 @@ async function scriptAction(what, btn) {
     render();
     return clickNode(sn, true);
   }
+  if (what === 'user-create') {
+    const repo = n.type === 'repo' ? n : store.byRepo[n.repo];
+    if (!repo?.ins) return;
+    repo.scErr = '';
+    btn.disabled = true;
+    btn.textContent = t('creating');
+    const r = await post('script-empty-create', { repo: repo.path });
+    btn.disabled = false;
+    if (r.error) { repo.scErr = r.error; return showPanel(repo, true); }
+    repo.ins.scripts ||= [];
+    repo.ins.scripts.push({ name: r.name, slot: r.slot });
+    const sn = attachUserScript(repo, r);
+    sn.sc = r;
+    repo.open = true;
+    render();
+    return clickNode(sn, true);
+  }
+  if (what === 'log-clear') {
+    btn.disabled = true;
+    const r = await clearBuildLog(n);
+    btn.disabled = false;
+    if (r.error) { n.bd.error = r.error; showPanel(n, true); }
+    return;
+  }
+  if (what === 'delete') {
+    const name = n.scriptName || SCRIPT;
+    if (!await confirmDeleteScript(name)) return;
+    if (btn) btn.disabled = true;
+    const r = await post('script-delete', { repo: n.repo, name });
+    if (r.error) {
+      if (btn) btn.disabled = false;
+      n.sc.saveErr = r.error;
+      return scriptStatusRefresh(n);
+    }
+    const repo = store.byRepo[n.repo];
+    if (!repo) return;
+    repo.children = repo.children.filter(c => c !== n);
+    if (n.customScript) repo.ins.scripts = (repo.ins.scripts || []).filter(s => s.name !== name);
+    else if (repo.ins) repo.ins.script = false;
+    const runs = store.builds?.[n.repo]?.scripts;
+    if (runs) {
+      delete runs[name];
+      if (!Object.keys(runs).length) delete store.builds[n.repo];
+    }
+    repo.open = true;
+    select(repo);
+    render();
+    showPanel(repo, true);
+    return;
+  }
   if (!n.sc) return;
   if (what === 'run' || what === 'stop') return runAction(n, what, btn);
   if (what === 'regen' && !confirm(t('regenAsk'))) return;
   btn && (btn.disabled = true);
   const text = n.sc.draft ?? n.sc.text;
-  const r = what === 'save' ? await post('script-save', { repo: n.repo, text })
+  const r = what === 'save' ? await post('script-save', { repo: n.repo, name: n.scriptName || SCRIPT, text })
     : await post('script-create', { repo: n.repo, overwrite: true });
   btn && (btn.disabled = false);
   if (r.error) { n.sc.saveErr = r.error; return scriptStatusRefresh(n); }
@@ -140,9 +190,18 @@ async function scriptAction(what, btn) {
   else scriptStatusRefresh(n);
 }
 
+function confirmDeleteScript(name) {
+  const dialog = $('#confirm-dialog');
+  $('#confirm-message').textContent = t('deleteAsk', { name });
+  return new Promise(resolve => {
+    dialog.addEventListener('close', () => resolve(dialog.returnValue === 'yes'), { once: true });
+    dialog.showModal();
+  });
+}
+
 // Chay: luu ban nhap truoc (chay dung cai dang thay tren man hinh). Dung: hoi lai cho chac.
 async function runAction(n, what, btn) {
-  if (what === 'stop' && !confirm(t('stopAsk'))) return;
+  if (what === 'stop' && !confirm(t(n.customScript ? 'stopScriptAsk' : 'stopAsk'))) return;
   btn.disabled = true;
   let r = {};
   if (what === 'run' && scriptDirty(n)) await scriptAction('save', null);
@@ -229,7 +288,7 @@ addEventListener('keydown', e => {
 
 $('#b-panel').onclick = togglePanel;
 $('#b-fit').onclick = fit;
-$('#b-collapse').onclick = () => { collapseAll(store.root); render(); fit(); };
+$('#b-collapse').onclick = () => { resetPanelSize(); collapseAll(store.root); render(); fit(); };
 $('#b-more').onclick = () => {
   visible(store.root).filter(n => n.type === 'dir' && !n.open).forEach(n => (n.open = true));
   render();
@@ -273,6 +332,7 @@ onLangChange(() => {
 
 (async function boot() {
   applyStatic();
+  initPanelResizer();
   const empty = $('#empty');
   const data = await api('tree');
   if (data.error) { empty.textContent = data.error; return; }

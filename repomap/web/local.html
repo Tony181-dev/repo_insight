@@ -17,7 +17,6 @@
     <nav class="ltabs" role="tablist">
       <button type="button" role="tab" data-tab="connect">Connect</button>
       <button type="button" role="tab" data-tab="saved">Saved servers <span id="n-saved" class="muted"></span></button>
-      <button type="button" role="tab" data-tab="deploy">Deploy to server</button>
     </nav>
 
     <section id="tab-connect" class="ltab" role="tabpanel">
@@ -56,6 +55,18 @@
           </div>
         </div>
       </div>
+      <div class="card pad deploy-card">
+        <div class="deploy-row">
+          <div class="deploy-copy">
+            <b>Deploy to server</b>
+            <span class="muted">Push <code>repomap.pyz</code><span id="dep-pyz"></span> and <code>repomap.ini</code> to <code id="dep-target">~/.bin</code> (created if needed).</span>
+            <span class="muted">Then on the server run <code id="dep-run">python3 ~/.bin/repomap.pyz</code> and choose <b>1. Run scan</b>.</span>
+          </div>
+          <button type="button" class="pri" id="deploy">Push to server</button>
+        </div>
+        <div id="dep-msg" class="msg"></div>
+        <div id="dep-cmd" class="cmdline"></div>
+      </div>
       <button type="button" class="pri big" id="connect">Connect</button>
       <div id="conn-msg" class="msg"></div>
       <div id="conn-cmd" class="cmdline"></div>
@@ -66,22 +77,6 @@
       <div id="saved-list"></div>
     </section>
 
-    <section id="tab-deploy" class="ltab" role="tabpanel" hidden>
-      <div class="card pad">
-        <p>Copies these files to <code id="dep-target">~/.bin</code> on the server (the folder is created if it is missing):</p>
-        <ul class="files">
-          <li><code>repomap.pyz</code> <span class="muted" id="dep-pyz"></span></li>
-          <li><code>repomap.ini</code> <span class="muted" id="dep-ini"></span></li>
-        </ul>
-        <button type="button" class="pri big" id="deploy">Push to server</button>
-        <div id="dep-msg" class="msg"></div>
-        <div id="dep-cmd" class="cmdline"></div>
-      </div>
-      <ol class="next">
-        <li>On the server: <code id="dep-run">python3 ~/.bin/repomap.pyz</code>, then choose <b>1. Run scan</b>.</li>
-        <li>Here: press <b>Connect</b>.</li>
-      </ol>
-    </section>
   </main>
   <script type="module" src="js/local.js"></script>
 </body>

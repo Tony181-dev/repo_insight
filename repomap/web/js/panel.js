@@ -8,6 +8,64 @@ import { createCodeView } from './codeview.js';
 import { statusText } from './build.js';
 
 const P = $('#panel');
+const RESIZER = $('#panel-resizer');
+
+function syncResizer() {
+  RESIZER.classList.toggle('hide', P.classList.contains('hide'));
+  const mainWidth = document.querySelector('#main').clientWidth;
+  const max = Math.max(180, mainWidth - 266);
+  RESIZER.setAttribute('aria-label', t('panelResize'));
+  RESIZER.setAttribute('aria-valuemin', String(Math.min(280, max)));
+  RESIZER.setAttribute('aria-valuemax', String(max));
+  RESIZER.setAttribute('aria-valuenow', String(Math.round(Math.min(max, P.getBoundingClientRect().width || 480))));
+}
+
+export function resetPanelSize() {
+  P.style.width = '';
+  syncResizer();
+}
+
+export function initPanelResizer() {
+  const setWidth = width => {
+    const mainWidth = document.querySelector('#main').clientWidth;
+    const max = Math.max(180, mainWidth - 266);
+    const min = Math.min(280, max);
+    const next = Math.max(min, Math.min(max, width));
+    P.style.width = `${next}px`;
+    RESIZER.setAttribute('aria-valuemin', String(min));
+    RESIZER.setAttribute('aria-valuemax', String(max));
+    RESIZER.setAttribute('aria-valuenow', String(Math.round(next)));
+  };
+  RESIZER.addEventListener('pointerdown', e => {
+    if (P.classList.contains('hide')) return;
+    e.preventDefault();
+    RESIZER.classList.add('dragging');
+    document.body.classList.add('resizing-panel');
+    RESIZER.setPointerCapture(e.pointerId);
+    const move = ev => setWidth(document.querySelector('#main').getBoundingClientRect().right - ev.clientX);
+    const end = () => {
+      RESIZER.classList.remove('dragging');
+      document.body.classList.remove('resizing-panel');
+      RESIZER.removeEventListener('pointermove', move);
+      RESIZER.removeEventListener('pointerup', end);
+      RESIZER.removeEventListener('pointercancel', end);
+    };
+    RESIZER.addEventListener('pointermove', move);
+    RESIZER.addEventListener('pointerup', end);
+    RESIZER.addEventListener('pointercancel', end);
+  });
+  RESIZER.addEventListener('keydown', e => {
+    const width = P.getBoundingClientRect().width || 480;
+    if (e.key === 'Home') { e.preventDefault(); resetPanelSize(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault(); setWidth(width + (e.key === 'ArrowLeft' ? 20 : -20));
+    }
+  });
+  addEventListener('resize', () => {
+    if (P.style.width && !P.classList.contains('hide')) setWidth(P.getBoundingClientRect().width);
+  });
+  syncResizer();
+}
 
 // ---------------------------------------------------------------- khoi HTML nho
 
@@ -57,13 +115,16 @@ function dirPanel(n) {
 
 function repoPanel(n) {
   const i = n.ins, d = n.dp;
+  const scripts = i?.scripts || [], customLimit = scripts.length >= 3;
   let h = header(n, n.label, n.path)
     + tags((n.r.tags.length ? n.r.tags : [n.kind]).map(k => tag(k, KIND_COLOR[k])))
     + `<div class="btns"><button class="pri" data-a="deep">${t(d ? 'rescan' : 'deepScan')}</button>
        <button data-a="copy" data-t="${esc(store.data.root + '/' + n.path)}">${t('copyPath')}</button>
        ${srcButton(n.path, '')}
        <button class="script-btn" data-a="${i?.script ? 'script-open' : 'script-create'}"${!i || (!i.script && store.data.noEdit)
-         ? ` disabled title="${esc(store.data.noEdit || '')}"` : ''}>${t(i?.script ? 'openScript' : 'createScript')}</button></div>`
+         ? ` disabled title="${esc(store.data.noEdit || '')}"` : ''}>${t(i?.script ? 'openBuildScript' : 'createBuildScript')}</button>
+       <button class="script-btn" data-a="script-user-create"${!i || store.data.noEdit || customLimit
+         ? ` disabled title="${esc(customLimit ? t('scriptLimit') : store.data.noEdit || '')}"` : ''}>${t('createScript')} <span class="script-count">${scripts.length}/3</span></button></div>`
     + (n.scErr ? `<div class="err">${esc(n.scErr)}</div>` : '');
 
   if (!i) return h + `<div class="load">${t('reading')}</div>`;
@@ -140,26 +201,30 @@ function scriptStatus(n) {
 
 function scriptPanel(n) {
   const s = n.sc, ro = store.data.noEdit;
-  let h = header(n, SCRIPT, `${n.repo}/${SCRIPT}`).replace(/background:[^"]+/, 'background:#f0b429')
-    + tags([tag(t('buildScript'), '#f0b429'),
+  const name = n.scriptName || SCRIPT, title = n.customScript ? n.label : SCRIPT;
+  let h = header(n, title, `${n.repo}/${name}`).replace(/background:[^"]+/, 'background:#f0b429')
+    + tags([tag(t(n.customScript ? 'userScript' : 'buildScript'), '#f0b429'),
       store.byRepo[n.repo] ? `<a class="tag lnk" data-a="repo" data-p="${esc(n.repo)}">${t('openRepo')}</a>` : '']);
   if (!s) return h + `<div class="load">${t('reading')}</div>`;
   if (s.error) return h + `<div class="err">${esc(s.error)}</div>`;
   const [cls, msg] = scriptStatus(n), off = ro ? ' disabled' : '';
-  const bd = n.bd, running = bd?.state === 'running', [bcls, bmsg] = statusText(bd), log = bd?.text || '';
+  const bd = n.bd, running = bd?.state === 'running', [bcls, bmsg] = statusText(bd, !!n.customScript), log = bd?.text || '';
   return h + `<div class="btns"><button class="pri" data-a="script-save"${off}>${t('save')}</button>
-      <button data-a="script-regen"${off}>${t('regenerate')}</button>
+      ${n.customScript ? '' : `<button data-a="script-regen"${off}>${t('regenerate')}</button>`}
+      <button class="icon-btn delete-script" data-a="script-delete"${off} title="${esc(t('deleteScript'))}"
+        aria-label="${esc(t('deleteScript'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-.9 14H5.9L5 6m4 4v6m6-6v6"/></svg></button>
       <span class="sc-st ${cls}" id="sc-st">${esc(msg)}</span>
       <span class="grow"></span>
       <button class="run-btn" data-a="script-run"${off}${running ? ' hidden' : ''}
-        title="${esc(t('runHint'))}">${t('runBuild')}</button>
+        title="${esc(t(n.customScript ? 'runScriptHint' : 'runHint'))}">${t(n.customScript ? 'runScript' : 'runBuild')}</button>
       <button class="stop-btn" data-a="script-stop"${off}${running ? '' : ' hidden'}>${t('stopBuild')}</button></div>
-    <div class="muted sc-hint">${ro ? esc(t('readOnly', { why: ro })) : t('scriptHint')}
+    <div class="muted sc-hint">${ro ? esc(t('readOnly', { why: ro })) : t(n.customScript ? 'userScriptHint' : 'scriptHint')}
       <span class="bd-st ${bcls}" id="bd-st">${esc(bmsg)}</span></div>
     ${bd?.error ? `<div class="err">${esc(bd.error)}</div>` : ''}
     <textarea id="sc-ed" class="sc-ed${log ? ' with-log' : ''}" spellcheck="false" autocomplete="off"${
       ro ? ' readonly' : ''}>${esc(s.draft ?? s.text)}</textarea>
-    <h4 id="bd-hd"${log ? '' : ' hidden'}>${t('buildLog')}</h4>
+    <div class="log-hd" id="bd-hd"${log ? '' : ' hidden'}><h4>${t(n.customScript ? 'scriptLog' : 'buildLog')}</h4>
+      <button class="clear-log" data-a="script-log-clear"${off}>${t('clearLog')}</button></div>
     <pre id="bd-log" class="bd-log"${log ? '' : ' hidden'}>${esc(log)}</pre>`;
 }
 
@@ -185,6 +250,7 @@ export function showPanel(n, keepScroll = false) {
   code?.destroy();
   code = null;
   P.classList.remove('hide');
+  syncResizer();
   P.innerHTML = fn(n);
   P.scrollTop = keepScroll ? top : 0;
   const box = P.querySelector('#pcode');
@@ -205,11 +271,12 @@ export function showHtml(html) {
   code?.destroy();
   code = null;
   P.classList.remove('hide');
+  syncResizer();
   P.innerHTML = html;
   P.scrollTop = 0;
 }
 
-export const togglePanel = () => P.classList.toggle('hide');
+export const togglePanel = () => { P.classList.toggle('hide'); syncResizer(); };
 
 // actions: { deep(btn), open(item), repo(path), cat(id), src({repo, base, file}), script(action, btn) }
 export function bindPanel(actions) {
@@ -224,7 +291,8 @@ export function bindPanel(actions) {
       case 'cat': return actions.cat(d.c);
       case 'src': return actions.src({ repo: d.repo, base: d.base, file: d.f });
       case 'line': return goLine(+d.n);
-      case 'script-create': case 'script-open': case 'script-save': case 'script-regen':
+      case 'script-create': case 'script-open': case 'script-user-create': case 'script-save': case 'script-regen': case 'script-delete':
+      case 'script-log-clear':
       case 'script-run': case 'script-stop':
         return actions.script(d.a.slice(7), a);
       case 'copy': navigator.clipboard?.writeText(d.t); a.textContent = t('copied'); return;

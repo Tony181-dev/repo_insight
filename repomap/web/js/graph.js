@@ -1,6 +1,6 @@
 // Ve cay ngang bang SVG: layout, animation, pan/zoom.
 
-import { $, colorOf, trunc, store } from './util.js';
+import { $, colorOf, trunc, store, SCRIPT } from './util.js';
 import { visible, countLabel, expandable, labelOf } from './tree.js';
 import { isRunning } from './build.js';
 
@@ -68,7 +68,7 @@ function update(n, e) {
   if (c) { const s = el('tspan', { class: 'cnt', dx: 7 }); s.textContent = c; e.text.append(s); }
   e.shape.style.fill = n.open || !expandable(n) ? 'var(--bg)' : colorOf(n);
   e.g.classList.toggle('sel', n === store.sel);
-  if (n.script) e.g.classList.toggle('running', isRunning(n.repo));       // build dang chay: node nhap nhay
+  if (n.script) e.g.classList.toggle('running', isRunning(n.repo, n.scriptName || SCRIPT));
   e.title.textContent = n.f ? `${n.repo}/${n.f}` : n.path || labelOf(n);
 }
 

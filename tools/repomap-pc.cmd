@@ -1,5 +1,5 @@
 @echo off
-rem repomap tren PC: mo trang Connect / Saved servers / Deploy (http://127.0.0.1:6960/), khong de lai cua so cmd.
+rem repomap tren PC: mo trang Connect (co Deploy) / Saved servers (http://127.0.0.1:6960/), khong de lai cua so cmd.
 rem Can Python 3.8+ (python.org) va OpenSSH client (co san tren Windows 10/11). Dat file nay canh repomap.pyz.
 set "PYZ=%~dp0repomap.pyz"
 if not exist "%PYZ%" (echo repomap.pyz not found next to this file: %PYZ% & pause & exit /b 1)

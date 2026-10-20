@@ -3,7 +3,7 @@
 // Panel dang mo script: poll moi giay, noi them log vao khung; mat ket noi thi thu lai, noi lai doc tiep tu `next`.
 // Ngoai ra poll /api/builds moi vai giay khi con build dang chay de to sang node script trong cay.
 
-import { $, api, post, store } from './util.js';
+import { $, api, post, store, SCRIPT } from './util.js';
 import { t } from './i18n.js';
 
 const KEEP = 1 << 20;                   // giu toi da 1 MB log cuoi trong trinh duyet
@@ -11,7 +11,10 @@ const ANSI = /\x1b\[[0-9;?]*[A-Za-z]|\x1b\][^\x07]*\x07/g;
 let onChange = () => {};
 let viewTimer = 0, allTimer = 0;
 
-export const isRunning = repo => store.builds?.[repo]?.state === 'running';
+export const isRunning = (repo, script = SCRIPT) => {
+  const b = store.builds?.[repo];
+  return b?.scripts ? b.scripts[script]?.state === 'running' : b?.state === 'running';
+};
 
 export function initBuild(changed) {
   onChange = changed;
@@ -19,16 +22,25 @@ export function initBuild(changed) {
   pollAll();
 }
 
+const anyRunning = runs => Object.values(runs).some(b =>
+  b.scripts ? Object.values(b.scripts).some(s => s.state === 'running') : b.state === 'running');
+
 export const fmtTime = s => {
   s = Math.round(s || 0);
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = String(s % 60).padStart(2, '0');
   return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
 };
 
-export function statusText(bd) {
+export function statusText(bd, customScript = false) {
   if (!bd || bd.state === 'idle') return ['', ''];
   if (bd.lost) return ['lost', t('lostConn')];
   const time = fmtTime(bd.elapsed);
+  if (customScript) return {
+    running: ['run', t('scriptRunning', { t: time })],
+    done: ['ok', t('scriptDone', { t: time })],
+    failed: ['err', t('scriptFailed', { c: bd.code, t: time })],
+    stopped: ['err', t('scriptStopped', { t: time })],
+  }[bd.state] || ['', bd.state];
   return {
     running: ['run', t('buildRunning', { t: time })],
     done: ['ok', t('buildDone', { t: time })],
@@ -42,31 +54,40 @@ async function pollAll() {
   clearTimeout(allTimer);
   const d = await api('builds');
   if (!d.error) {
-    const before = JSON.stringify(Object.keys(store.builds).filter(isRunning));
+    const running = runs => Object.entries(runs).flatMap(([repo, b]) =>
+      Object.entries(b.scripts || {}).filter(([, s]) => s.state === 'running').map(([name]) => `${repo}|${name}`));
+    const before = JSON.stringify(running(store.builds));
     store.builds = d;
-    if (JSON.stringify(Object.keys(d).filter(isRunning)) !== before) onChange(null);
+    if (JSON.stringify(running(d)) !== before) onChange(null);
   }
-  allTimer = setTimeout(pollAll, Object.keys(store.builds).some(isRunning) ? 3000 : 15000);
+  allTimer = setTimeout(pollAll, anyRunning(store.builds) ? 3000 : 15000);
 }
 
 // doc tiep log cua node script n; tail=true: lan dau mo panel, chi lay phan cuoi log
 export async function poll(n, tail = false) {
   clearTimeout(viewTimer);
   const bd = n.bd || (n.bd = { state: 'idle', text: '', next: 0 });
-  const d = await api('build', { repo: n.repo, from: tail ? -1 : bd.next });
+  const clearVersion = n.logClearVersion || 0;
+  const d = await api('build', { repo: n.repo, name: n.scriptName || SCRIPT, from: tail ? -1 : bd.next });
+  if (clearVersion !== (n.logClearVersion || 0)) return;
   if (d.error) {
     bd.lost = /fetch|network|TypeError/i.test(d.error);
     if (!bd.lost) bd.error = d.error;
-  } else if (!tail && d.next < bd.next) {                     // log da bi ghi lai (build moi): doc lai tu dau
+  } else if (!tail && !d.reset && d.next < bd.next) {         // log da bi ghi lai (build moi): doc lai tu dau
     Object.assign(bd, { text: '', next: 0 });
     return poll(n);
   } else {
     const chunk = d.log.replace(ANSI, '').replace(/\r(?!\n)/g, '\n');
-    const restart = tail;                                       // mo panel: doc lai phan cuoi
-    bd.text = restart ? (d.next > d.log.length && tail ? '…\n' : '') + chunk : bd.text + chunk;
+    const restart = tail || d.reset;                           // mo panel hoac vua clear log
+    bd.text = restart ? (tail && d.next < d.size ? '…\n' : '') + chunk : bd.text + chunk;
     if (bd.text.length > KEEP) bd.text = '…\n' + bd.text.slice(-KEEP);
     Object.assign(bd, { state: d.state, code: d.code, elapsed: d.elapsed, next: d.next, lost: false, error: '' });
-    if (store.builds && d.state !== 'idle') store.builds[n.repo] = { state: d.state };
+    if (store.builds && d.state !== 'idle') {
+      const b = store.builds[n.repo] || (store.builds[n.repo] = { scripts: {} });
+      b.scripts ||= {};
+      b.scripts[n.scriptName || SCRIPT] = { state: d.state };
+      b.state = Object.values(b.scripts).some(s => s.state === 'running') ? 'running' : d.state;
+    }
     render(n, restart ? null : chunk);
   }
   if (bd.lost) render(n, null, true);
@@ -80,7 +101,7 @@ function render(n, chunk, statusOnly = false) {
   if (store.sel !== n) return;
   const st = $('#bd-st'), log = $('#bd-log');
   if (st) {
-    const [cls, msg] = statusText(n.bd);
+    const [cls, msg] = statusText(n.bd, !!n.customScript);
     st.className = 'bd-st ' + cls;
     st.textContent = msg;
   }
@@ -98,10 +119,14 @@ function render(n, chunk, statusOnly = false) {
 }
 
 export async function startBuild(n) {
-  const r = await post('build-start', { repo: n.repo });
+  const script = n.scriptName || SCRIPT;
+  const r = await post('build-start', { repo: n.repo, name: script });
   if (r.error) return r;
   n.bd = { state: 'running', text: '', next: 0, elapsed: 0 };
-  store.builds[n.repo] = r;
+  const b = store.builds[n.repo] || (store.builds[n.repo] = { scripts: {} });
+  b.scripts ||= {};
+  b.scripts[script] = { state: 'running' };
+  b.state = 'running';
   onChange(n);
   poll(n);
   pollAll();
@@ -109,7 +134,24 @@ export async function startBuild(n) {
 }
 
 export async function stopBuild(n) {
-  const r = await post('build-stop', { repo: n.repo });
+  const r = await post('build-stop', { repo: n.repo, name: n.scriptName || SCRIPT });
   if (!r.error) poll(n);
+  return r;
+}
+
+export async function clearBuildLog(n) {
+  const script = n.scriptName || SCRIPT;
+  n.logClearVersion = (n.logClearVersion || 0) + 1;
+  clearTimeout(viewTimer);
+  const r = await post('build-clear', { repo: n.repo, name: script });
+  if (r.error) {
+    if (store.sel === n) viewTimer = setTimeout(() => poll(n), 0);
+    return r;
+  }
+  const bd = n.bd || (n.bd = { state: 'idle', text: '', next: 0 });
+  Object.assign(bd, { state: r.state, code: r.code, elapsed: r.elapsed, text: '', next: r.next || 0,
+    lost: false, error: '' });
+  render(n, null);
+  if (store.sel === n) viewTimer = setTimeout(() => poll(n), bd.state === 'running' ? 1000 : 0);
   return r;
 }

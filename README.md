@@ -26,7 +26,7 @@ repomap ~/your_workspace_root                       # menu: 1. Run scan / 2. Con
 repomap                                             # như trên, dùng workspace đã quét lần trước
 repomap ~/your_workspace_root --run                 # bỏ qua menu, chạy ngay (dùng trong script)
 repomap ~/your_workspace_root --json vendor/foo     # in JSON insight + quét sâu 1 repo
-repomap --local                                     # trên PC: trang Connect / Saved servers / Deploy
+repomap --local                                     # trên PC: Connect (có Deploy) / Saved servers
 python3 -m repomap ...                              # chạy từ source, cùng tham số
 ```
 
@@ -40,14 +40,13 @@ Port nào đang bận thì tool báo rõ và chuyển sang port kế tiếp.
 ### Trên PC: không cần gõ lệnh
 
 Trên PC Windows có Python 3.8+, nhấp đúp `repomap-pc.cmd` (trong gói phát hành, cạnh `repomap.pyz`) hoặc chạy
-`python repomap.pyz --local`. Trình duyệt mở http://127.0.0.1:6960 với 3 tab:
+`python repomap.pyz --local`. Trình duyệt mở http://127.0.0.1:6960 với hai tab:
 
 - **Connect**: Configuration (SSH host/user/port, port server = port PC, mặc định 6969; chấm xanh/đỏ), *Quick setup*
   (dán lệnh ssh), *Save preset*. Nút **Connect** mở cửa sổ ssh tunnel (gõ password ở đó) và tự mở trang repomap khi
-  server trả lời. Port trên PC đang bận thì báo ngay.
+  server trả lời. Port trên PC đang bận thì báo ngay. Nút **Push to server** ngay bên dưới đẩy `repomap.pyz` +
+  `repomap.ini` vào `~/.bin`; trên server chạy `python3 ~/.bin/repomap.pyz` rồi chọn `1. Run scan`.
 - **Saved servers**: tối đa 5 preset, chọn một preset để điền vào Configuration.
-- **Deploy to server**: `scp -r` một lần, đẩy `repomap.pyz` + `repomap.ini` (theo Configuration) vào `~/.bin` trên server.
-  Trên server chỉ cần `python3 ~/.bin/repomap.pyz` → `1. Run scan`, rồi bấm Connect trên PC.
 
 Cấu hình và preset của PC lưu ở `~/.config/repomap/local.json`. Trang tự tắt ~3 phút sau khi đóng tab.
 
@@ -56,8 +55,8 @@ Giao diện có nút **EN / VI** cạnh ô tìm kiếm (mặc định tiếng An
 ## Cấu hình
 
 Cách dễ nhất là menu `3. Quick setup` hoặc `2. Configuration`: nhập rồi lưu vào `~/.config/repomap/config.ini`
-(hoặc file cấu hình đang dùng), lần sau không phải nhập lại. File `repomap.ini` nằm cạnh `repomap.pyz` (tab Deploy
-trên PC đẩy lên `~/.bin`) cũng được đọc, sau `./repomap.ini`. Workspace quét lần trước cũng được nhớ. Cũng có thể sửa file bằng tay:
+(hoặc file cấu hình đang dùng), lần sau không phải nhập lại. File `repomap.ini` nằm cạnh `repomap.pyz` (được nút
+Push to server trong tab Connect đẩy lên `~/.bin`) cũng được đọc, sau `./repomap.ini`. Workspace quét lần trước cũng được nhớ. Cũng có thể sửa file bằng tay:
 
 ```sh
 repomap --init-config                 # tạo ~/.config/repomap/config.ini (có chú thích)
@@ -96,6 +95,7 @@ File được tìm theo thứ tự: `--config` > `$REPOMAP_CONFIG` > `./repomap.
 | 3 | Bấm file | Biến, module/target, tham chiếu đã resolve: `require/include/inherit`, `inherit-product`, `#include` dts và C/C++, `source` Kconfig, `add_subdirectory`, recipe ↔ bbappend, `SRC_URI` → repo trong manifest, Python `import`, GitLab CI `include`, Ansible role/`import_tasks`, Terraform module. Bấm tiếp để đi sâu. |
 | + | Bấm **Open full source** | Ở panel repo (cả repo) hoặc file (thư mục của module): cây thư mục nạp lười + nội dung có tô màu, tìm file theo tên, tìm nội dung (`git grep`), bấm tham chiếu để nhảy file. **← Back** (hoặc Esc / nút Back của trình duyệt) quay lại cây. |
 | + | Bấm **Create build script** | Ở panel repo: tạo `repomap_build_script.sh` ở gốc repo, đoán lệnh build theo loại module (xem dưới). File hiện thành node màu vàng đầu nhánh repo; bấm vào để sửa và **Save** (Ctrl+S) ngay trên giao diện, **Regenerate** để sinh lại. |
+| + | Bấm **Create script** | Tạo tối đa 3 script trống trong mỗi repo. Script hiện trên cây; bấm node để sửa, **Save** để lưu, **Run script** để chạy và **Stop** để dừng. Mỗi script có log riêng; **Clear log** xóa phần log cũ mà không dừng script đang chạy. |
 
 ### Build script
 
@@ -152,7 +152,7 @@ repomap/
   buildscript.py sinh / đọc / lưu repomap_build_script.sh của module
   builds.py      chạy / dừng script đó, log build; dừng theo repomap
   guard.py       ai được ghi file qua server (chỉ user chạy repomap, từ chính trang repomap)
-  local.py       chế độ PC (--local): Connect / Saved servers / Deploy
+  local.py       chế độ PC (--local): Connect (có Deploy) / Saved servers
   parsers.py     parser BitBake/Make/Android.bp/Kconfig/DTS/CMake/QNX/C-C++
   parsers_py.py  parser Python (ast) + đọc TOML tối giản
   parsers_devops.py  parser YAML CI/Ansible/compose, Dockerfile, Jenkinsfile, Terraform

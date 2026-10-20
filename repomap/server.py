@@ -9,12 +9,11 @@
   GET /api/search?repo=PATH&base=REL&q=TEXT&mode=name|text -> full source: tim file / tim noi dung
   GET /api/arch[?force=1]              -> kien truc tong: component theo tang (block view, ban gon)
   GET /api/archbox?id=BOX              -> chi tiet 1 khoi (file, phu thuoc cua tung component)
-  GET /api/script?repo=PATH            -> noi dung repomap_build_script.sh cua module
-  POST /api/script-create {repo, overwrite}  -> sinh script (buildscript.py)
-  POST /api/script-save   {repo, text}       -> luu script
-  POST /api/build-start {repo} / build-stop {repo} -> chay / dung script (builds.py)
-  GET /api/build?repo=PATH&from=N      -> trang thai build + log tu byte N
-  GET /api/builds                      -> trang thai build cua moi module
+  GET /api/script?repo=PATH&name=FILE  -> noi dung build script hoac script rieng cua module
+  POST /api/script-create / script-empty-create / script-save -> tao va luu script
+  POST /api/build-start / build-stop / build-clear -> chay, dung, xoa log
+  GET /api/build?repo=PATH&name=FILE&from=N -> trang thai + log tu byte N
+  GET /api/builds                      -> trang thai script dang chay cua moi module
 API ghi (POST) chi nhan tu chinh trang repomap cua user dang chay server: xem guard.py.
 """
 import json
@@ -28,7 +27,8 @@ from urllib.parse import parse_qs, urlparse
 from . import __version__
 from .arch import box_detail, build_arch, slim_arch
 from .builds import Builds
-from .buildscript import create_script, has_script, read_script, save_script
+from .buildscript import (SCRIPT, create_empty_script, create_script, custom_scripts, has_script,
+                          read_script, save_script)
 from .deepscan import deep_scan
 from .fileview import file_lines, file_view
 from .guard import write_denied
@@ -98,11 +98,11 @@ def make_handler(ws, builds):
                 return self._send({'error': 'no such repo: ' + repo}, code=404)
             if ep == 'insight':
                 ins = ws.cached(('insight', repo), lambda: insight(ws, repo), force)
-                return self._send(dict(ins, script=has_script(ws, repo)))
+                return self._send(dict(ins, script=has_script(ws, repo), scripts=custom_scripts(ws, repo)))
             if ep == 'script':
-                return self._send(read_script(ws, repo))
+                return self._send(read_script(ws, repo, q.get('name') or SCRIPT))
             if ep == 'build':
-                return self._send(builds.status(repo, q.get('from', 0)))
+                return self._send(builds.status(repo, q.get('from', 0), q.get('name') or SCRIPT))
             if ep == 'deep':
                 return self._send(ws.cached(('deep', repo), lambda: deep_scan(ws, repo), force))
             if ep == 'file':
@@ -130,12 +130,19 @@ def make_handler(ws, builds):
                     return self._send({'error': 'no such repo: ' + repo}, code=404)
                 if ep == 'script-create':
                     return self._send(create_script(ws, repo, bool(body.get('overwrite'))))
+                if ep == 'script-empty-create':
+                    return self._send(create_empty_script(ws, repo))
+                if ep == 'script-delete':
+                    result = builds.delete_script(repo, body.get('name') or SCRIPT)
+                    return self._send(result, code=409 if result.get('error') else 200)
                 if ep == 'script-save':
-                    return self._send(save_script(ws, repo, body.get('text', '')))
+                    return self._send(save_script(ws, repo, body.get('text', ''), body.get('name') or SCRIPT))
                 if ep == 'build-start':
-                    return self._send(builds.start(repo))
+                    return self._send(builds.start(repo, body.get('name') or SCRIPT))
                 if ep == 'build-stop':
-                    return self._send(builds.stop(repo))
+                    return self._send(builds.stop(repo, script=body.get('name') or SCRIPT))
+                if ep == 'build-clear':
+                    return self._send(builds.clear(repo, body.get('name') or SCRIPT))
                 self._send({'error': 'unknown api: ' + ep}, code=404)
             except ConnectionError:
                 pass

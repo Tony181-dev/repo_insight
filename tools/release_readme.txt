@@ -36,9 +36,9 @@ CÀI ĐẶT TRÊN MÁY BUILD LINUX
 CÁCH NHANH NHẤT: DÙNG repomap TRÊN PC WINDOWS (cần Python 3.8+ trên PC)
 
   1. Giải nén gói trên PC, nhấp đúp repomap-pc.cmd. Trình duyệt mở trang
-     http://127.0.0.1:6960 với 3 tab: Connect / Saved servers / Deploy to server.
+     http://127.0.0.1:6960 với 2 tab: Connect / Saved servers.
   2. Tab Connect -> Configuration -> Quick setup: dán lệnh ssh của server.
-  3. Tab Deploy to server -> Push to server: chép repomap.pyz + repomap.ini
+  3. Trong tab Connect, bấm Push to server: chép repomap.pyz + repomap.ini
      vào ~/.bin trên server (gõ password trong cửa sổ ssh nếu được hỏi).
   4. Trên server:  python3 ~/.bin/repomap.pyz ~/your_workspace_root  -> 1. Run scan
   5. Trên PC: bấm Connect. Trang repomap tự mở khi server sẵn sàng.

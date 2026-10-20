@@ -46,7 +46,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outli
 
 /* ---------- graph ---------- */
 #main { position: absolute; top: 48px; bottom: 0; left: 0; right: 0; display: flex; }
-#stage { flex: 1; position: relative; overflow: hidden;
+#stage { flex: 1; min-width: 0; position: relative; overflow: hidden;
   background: radial-gradient(circle at 30% 40%, #121a24 0, var(--bg) 70%); }
 #svg { width: 100%; height: 100%; display: block; cursor: grab; user-select: none; }
 #svg:active { cursor: grabbing; }
@@ -156,9 +156,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outli
 .ah.in { fill: #d29922; }
 
 /* ---------- panel ---------- */
-#panel { width: 480px; flex: none; border-left: 1px solid var(--line); background: var(--bg2); overflow: auto;
+#panel-resizer { width: 6px; flex: 0 0 6px; cursor: col-resize; background: transparent; touch-action: none;
+  position: relative; z-index: 2; }
+#panel-resizer::after { content: ''; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px; background: var(--line); }
+#panel-resizer:hover::after, #panel-resizer:focus-visible::after, #panel-resizer.dragging::after { background: var(--acc); }
+#panel-resizer:focus-visible { outline: none; }
+#panel-resizer.hide { display: none; }
+#panel { width: min(480px, max(180px, calc(100vw - 266px))); flex: none; min-width: 0; border-left: 1px solid var(--line); background: var(--bg2); overflow: auto;
   padding: 16px 18px 40px; }
 #panel.hide { display: none; }
+body.resizing-panel { cursor: col-resize; user-select: none; }
 .hd { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
 .hd .dot { width: 14px; height: 14px; margin-top: 4px; }
 .ttl { font-size: 16px; font-weight: 650; word-break: break-all; }
@@ -168,6 +175,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outli
   border: 1px solid var(--line); color: var(--fg); }
 .btns { display: flex; gap: 6px; margin: 10px 0 4px; flex-wrap: wrap; align-items: center; }
 button.script-btn { border-color: #f0b42999; color: #f0b429; }
+.script-count { margin-left: 3px; font-size: 11px; opacity: .75; }
 .sc-st { font-size: 12px; color: var(--mute); margin-left: 4px; }
 .sc-st.dirty { color: #f0b429; }
 .sc-st.err { color: #ff7b72; }
@@ -188,6 +196,21 @@ button[hidden] { display: none; }
 .bd-st.ok { color: #3fb950; }
 .bd-st.err { color: #ff7b72; }
 .bd-st.lost { color: #e3b341; }
+.log-hd { display: flex; align-items: center; gap: 8px; }
+.log-hd h4 { flex: 1; margin: 18px 0 6px; }
+.clear-log { padding: 4px 8px; font-size: 11px; }
+.icon-btn { width: 30px; height: 30px; flex: none; display: inline-grid; place-items: center; padding: 0; }
+.icon-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.delete-script { color: #ff7b72; border-color: #f8514966; }
+.delete-script:hover { color: #fff; background: #da3633; border-color: #da3633; }
+.confirm-dialog { width: min(420px, calc(100vw - 32px)); padding: 20px; color: var(--fg); background: var(--bg2);
+  border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 18px 50px #0009; }
+.confirm-dialog::backdrop { background: #0009; }
+.confirm-dialog form { margin: 0; }
+.confirm-dialog p { margin: 0 0 20px; overflow-wrap: anywhere; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.confirm-yes { color: #fff; background: #da3633; border-color: #da3633; }
+.confirm-yes:hover { background: #f85149; border-color: #f85149; }
 .bd-log { margin: 0; height: calc(55vh - 110px); min-height: 200px; overflow: auto; background: #010409;
   border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 11.5px/1.45 var(--mono);
   white-space: pre-wrap; word-break: break-all; color: #c9d1d9; }

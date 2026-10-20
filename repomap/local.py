@@ -1,10 +1,10 @@
 """Che do PC:  python repomap.pyz --local   (hoac nhap dup repomap-pc.cmd tren Windows)
 
-Mo giao dien web tai http://127.0.0.1:6960/ (web/local.html) gom 3 tab:
+Mo giao dien web tai http://127.0.0.1:6960/ (web/local.html) gom 2 tab:
   Connect        cau hinh ssh (host/user/port + port server = port PC, mac dinh 6969), Quick setup tu lenh ssh,
-                 nut Connect: mo cua so ssh tunnel (-N -L) roi tu mo http://127.0.0.1:<port>/ khi server tra loi
+                 Push to server (scp len ~/.bin), nut Connect: mo cua so ssh tunnel (-N -L) roi tu mo
+                 http://127.0.0.1:<port>/ khi server tra loi
   Saved servers  toi da 5 preset
-  Deploy         day repomap.pyz + repomap.ini (cau hinh tren) vao ~/.bin tren server bang 1 lenh scp
 ssh/scp chay trong cua so console rieng de nhap password. Server nay tu thoat khi khong con trang nao mo (IDLE giay).
 
   GET  /api/local/state        -> cau hinh, preset, trang thai tunnel / deploy

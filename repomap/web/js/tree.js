@@ -69,7 +69,7 @@ export function buildTree(data) {
 
   compress(root);
   count(root);
-  autoOpen(root, 45);
+  collapseAll(root);
   return root;
 }
 
@@ -89,21 +89,6 @@ function count(n) {
   n.children.sort((a, b) => a.label.localeCompare(b.label));
   n.cnt = n.children.reduce((s, c) => s + count(c), 0);
   return n.cnt + (n.type === 'repo' ? 1 : 0);
-}
-
-function autoOpen(root, limit) {
-  root.open = true;
-  let shown = root.children.length;
-  const queue = [root];
-  while (queue.length) {
-    for (const c of queue.shift().children) {
-      if (c.type === 'dir' && shown + c.children.length < limit) {
-        c.open = true;
-        shown += c.children.length;
-        queue.push(c);
-      }
-    }
-  }
 }
 
 export function collapseAll(root) {
@@ -159,6 +144,7 @@ export function attachInsight(repo, ins) {
     repo.children.unshift(keys);
   }
   if (ins.script) attachScript(repo);
+  (ins.scripts || []).forEach(s => attachUserScript(repo, s));
 }
 
 export function attachDeep(repo, deep) {
@@ -170,11 +156,21 @@ export function attachDeep(repo, deep) {
 
 // build script cua module (repomap_build_script.sh o goc repo): node file dau tien, to sang trong cay
 export function attachScript(repo) {
-  let n = repo.children.find(c => c.grp === 'script');
+  let n = repo.children.find(c => c.buildScript);
   if (!n) {
-    n = node({ type: 'file', label: SCRIPT, f: SCRIPT, line: 0, grp: 'script', script: true }, repo);
+    n = node({ type: 'file', label: SCRIPT, f: SCRIPT, line: 0, grp: 'script', script: true, buildScript: true }, repo);
     repo.children.unshift(n);
   }
+  return n;
+}
+
+export function attachUserScript(repo, s) {
+  let n = repo.children.find(c => c.customScript && c.scriptName === s.name);
+  if (n) return n;
+  const slot = s.slot || +(s.name.match(/_(\d+)\.sh$/)?.[1] || 0);
+  n = node({ type: 'file', label: `Script ${slot}`, f: s.name, line: 0, grp: 'script', script: true,
+    customScript: true, scriptName: s.name }, repo);
+  repo.children.push(n);
   return n;
 }
 

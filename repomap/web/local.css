@@ -1,4 +1,4 @@
-/* Trang PC (local.html): Connect / Saved servers / Deploy. Dung chung bien mau va nut voi style.css. */
+/* Trang PC (local.html): Connect (co Deploy) / Saved servers. Dung chung bien mau va nut voi style.css. */
 body.lp { overflow: auto; }
 #ver { font-size: 12px; margin-left: auto; }
 .lw { max-width: 620px; margin: 0 auto; padding: 22px 16px 40px; }
@@ -11,6 +11,11 @@ body.lp { overflow: auto; }
 .card { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 16px; }
 .card.pad { padding: 16px; }
 .card p { margin: 0 0 8px; }
+.deploy-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.deploy-copy { display: grid; gap: 5px; min-width: 0; font-size: 12.5px; line-height: 1.5; }
+.deploy-copy > b { font-size: 13.5px; }
+#dep-target { overflow-wrap: anywhere; }
+#deploy { flex: 0 0 auto; padding: 9px 14px; font-weight: 600; }
 .cfg-hd { width: 100%; display: flex; align-items: center; gap: 9px; border: 0; background: none; padding: 13px 16px;
   font-size: 13.5px; text-align: left; }
 .cfg-hd .car { font-style: normal; color: var(--mute); width: 10px; }
@@ -54,4 +59,7 @@ button.big { width: 100%; padding: 11px; font-size: 14px; font-weight: 600; }
 .files { margin: 0 0 14px; padding-left: 18px; line-height: 1.9; }
 .next { color: var(--mute); line-height: 1.9; padding-left: 20px; }
 
-@media (max-width: 520px) { .fields { grid-template-columns: 1fr; } }
+@media (max-width: 520px) {
+  .fields { grid-template-columns: 1fr; }
+  .deploy-row { align-items: stretch; flex-direction: column; gap: 10px; }
+}

@@ -50,6 +50,9 @@
       </div>
     </section>
 
+    <div id="panel-resizer" role="separator" aria-orientation="vertical" data-i18n-title="panelResize"
+      aria-label="Resize details panel"
+      aria-valuemin="280" aria-valuenow="480" tabindex="0"></div>
     <aside id="panel">
       <div class="muted" data-i18n-html="help"></div>
     </aside>
@@ -67,6 +70,16 @@
       </div>
     </section>
   </main>
+
+  <dialog id="confirm-dialog" class="confirm-dialog">
+    <form method="dialog">
+      <p id="confirm-message"></p>
+      <div class="confirm-actions">
+        <button value="no" data-i18n="no"></button>
+        <button class="confirm-yes" value="yes" data-i18n="yes"></button>
+      </div>
+    </form>
+  </dialog>
 
   <script type="module" src="js/main.js"></script>
 </body>

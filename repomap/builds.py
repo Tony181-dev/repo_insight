@@ -1,12 +1,12 @@
 """Chay repomap_build_script.sh cua module tren server, log ra file de giao dien doc dan.
 
 Vong doi:
-  - moi module chay toi da 1 build; build chay trong process group rieng (session moi), stdin = /dev/null
+  - moi script trong moi module chay toi da 1 lan; tien trinh chay trong process group rieng (session moi)
   - Stop (nut tren giao dien): SIGTERM ca nhom, sau STOP_GRACE giay chua tat thi SIGKILL
   - repomap dung (Ctrl+C, SIGTERM, SIGHUP khi phien ssh chay repomap bi dut): cli goi stop_all() -> build dung theo
   - repomap bi kill -9: tren Linux bash bao ve nhan SIGTERM (PR_SET_PDEATHSIG) va dung ca nhom
   - trinh duyet / tunnel mat ket noi: build van chay; giao diện doc tiep log tu offset da doc khi noi lai
-Log: $REPOMAP_CACHE_DIR (mac dinh ~/.cache/repomap)/builds-<hash workspace>/<repo>.log, ghi de moi lan chay.
+Log: $REPOMAP_CACHE_DIR (mac dinh ~/.cache/repomap)/builds-<hash workspace>/<repo>[__<script>].log, ghi de moi lan chay.
 """
 import hashlib
 import os
@@ -18,7 +18,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from .buildscript import SCRIPT, script_path
+from .buildscript import SCRIPT, delete_script as remove_script_file, script_path
 
 STOP_GRACE = 10           # giay cho build tu dung sau SIGTERM
 MAX_READ = 512 * 1024     # toi da moi lan doc log
@@ -84,23 +84,24 @@ class WinJob:
 
 
 class Run:
-    def __init__(self, repo, log):
-        self.repo, self.log = repo, log
+    def __init__(self, repo, script, log):
+        self.repo, self.script, self.log = repo, script, log
         self.proc = self.job = None
         self.state, self.code = 'running', None          # running | done | failed | stopped
         self.started, self.ended = time.time(), None
         self.stopping = False
+        self.clear_at = 0
 
     def info(self):
         end = self.ended or time.time()
-        return {'repo': self.repo, 'state': self.state, 'code': self.code, 'started': self.started,
+        return {'repo': self.repo, 'script': self.script, 'state': self.state, 'code': self.code, 'started': self.started,
                 'elapsed': round(end - self.started, 1)}
 
 
 class Builds:
     def __init__(self, ws):
         self.ws = ws
-        self.runs = {}                                    # repo -> Run (lan chay gan nhat)
+        self.runs = {}                                    # (repo, script) -> Run
         self.lock = threading.Lock()
         # tien trinh build duoc tao tu 1 luong song suot doi server (khong phai luong xu ly request, luong do
         # ket thuc ngay sau khi tra loi -> PR_SET_PDEATHSIG se giet build ngay)
@@ -110,20 +111,26 @@ class Builds:
     def bash(self):
         b = os.environ.get('REPOMAP_BASH') or shutil.which('bash')      # REPOMAP_BASH: chon bash khac
         if not b:
-            raise ValueError('bash was not found on the server, cannot run %s' % SCRIPT)
+            raise ValueError('bash was not found on the server, cannot run scripts')
         return b
 
-    def start(self, repo):
-        path = script_path(self.ws, repo)
+    def start(self, repo, script=SCRIPT):
+        path = script_path(self.ws, repo, script)
         if not os.path.isfile(path):
-            raise ValueError('%s not found in %s: create it first' % (SCRIPT, repo or '.'))
+            raise ValueError('%s not found in %s: create it first' % (script, repo or '.'))
+        key = (repo, script)
         with self.lock:
-            old = self.runs.get(repo)
+            if not os.path.isfile(path):
+                raise ValueError('%s not found in %s: create it first' % (script, repo or '.'))
+            old = self.runs.get(key)
             if old and old.state == 'running':
-                raise ValueError('a build is already running for %s' % (repo or '.'))
+                raise ValueError('%s is already running in %s' % (script, repo or '.'))
             os.makedirs(log_dir(self.ws), exist_ok=True)
-            log = os.path.join(log_dir(self.ws), (repo or 'root').replace('/', '__') + '.log')
-            run = Run(repo, log)
+            stem = (repo or 'root').replace('/', '__')
+            if script != SCRIPT:
+                stem += '__' + script
+            log = os.path.join(log_dir(self.ws), stem + '.log')
+            run = Run(repo, script, log)
             out = open(log, 'wb')
             out.write(('$ bash %s   (repomap, %s)\n' % (path, time.strftime('%Y-%m-%d %H:%M:%S'))).encode('utf-8'))
             out.flush()
@@ -147,9 +154,24 @@ class Builds:
                         run.job = None
             finally:
                 out.close()
-            self.runs[repo] = run
+            self.runs[key] = run
         threading.Thread(target=self._wait, args=(run,), daemon=True).start()
         return run.info()
+
+    def delete_script(self, repo, script=SCRIPT):
+        key = (repo, script)
+        with self.lock:
+            run = self.runs.get(key)
+            if run and run.state == 'running':
+                return {'error': '%s is running in %s; stop it before deleting' % (script, repo or '.')}
+            result = remove_script_file(self.ws, repo, script)
+            self.runs.pop(key, None)
+            if run:
+                try:
+                    os.remove(run.log)
+                except OSError:
+                    pass
+            return result
 
     def _wait(self, run):
         run.proc.wait()
@@ -170,10 +192,10 @@ class Builds:
         except OSError:
             pass
 
-    def stop(self, repo, wait=False):
-        run = self.runs.get(repo)
+    def stop(self, repo, wait=False, script=SCRIPT):
+        run = self.runs.get((repo, script))
         if not run or run.state != 'running':
-            return run.info() if run else {'repo': repo, 'state': 'idle'}
+            return run.info() if run else {'repo': repo, 'script': script, 'state': 'idle'}
         run.stopping = True
         self._signal(run, signal.SIGTERM)
         hard = getattr(signal, 'SIGKILL', signal.SIGTERM)
@@ -201,37 +223,59 @@ class Builds:
 
     def stop_all(self):
         """repomap sap thoat: dung moi build dang chay (cho toi da STOP_GRACE giay)."""
-        running = [r for r, run in list(self.runs.items()) if run.state == 'running']
-        for repo in running:
-            self.stop(repo)
+        running = [key for key, run in list(self.runs.items()) if run.state == 'running']
+        for repo, script in running:
+            self.stop(repo, script=script)
         end = time.time() + STOP_GRACE
-        for repo in running:
-            proc = self.runs[repo].proc
+        for key in running:
+            proc = self.runs[key].proc
             try:
                 proc.wait(max(0.1, end - time.time()))
             except subprocess.TimeoutExpired:
-                self._signal(self.runs[repo], getattr(signal, 'SIGKILL', signal.SIGTERM))
+                self._signal(self.runs[key], getattr(signal, 'SIGKILL', signal.SIGTERM))
         return running
 
-    def status(self, repo, offset=0):
+    def status(self, repo, offset=0, script=SCRIPT):
         """Trang thai + log tu byte `offset` (giao dien goi lien tuc khi dang xem; noi lai thi doc tiep)."""
-        run = self.runs.get(repo)
+        run = self.runs.get((repo, script))
         if not run:
-            return {'repo': repo, 'state': 'idle', 'log': '', 'next': 0}
+            return {'repo': repo, 'script': script, 'state': 'idle', 'log': '', 'next': 0}
         info = run.info()
         try:
             size = os.path.getsize(run.log)
-            offset = int(offset)
-            offset = max(0, size - MAX_READ) if offset < 0 else min(offset, size)     # -1: phan cuoi log
+            requested = int(offset)
+            reset = requested >= 0 and requested < run.clear_at
+            offset = max(run.clear_at, size - MAX_READ) if requested < 0 else max(run.clear_at, min(requested, size))
             with open(run.log, 'rb') as f:
                 f.seek(offset)
                 data = f.read(MAX_READ)
             if len(data) == MAX_READ and data.rfind(b'\n') > 0:      # khong cat giua 1 ky tu UTF-8
                 data = data[:data.rfind(b'\n') + 1]
         except (OSError, ValueError):
-            size, data = 0, b''
-        info.update(log=data.decode('utf-8', 'replace'), next=offset + len(data), size=size)
+            size, offset, data, reset = 0, 0, b'', False
+        info.update(log=data.decode('utf-8', 'replace'), next=offset + len(data), size=size, reset=reset)
         return info
 
+    def clear(self, repo, script=SCRIPT):
+        with self.lock:
+            run = self.runs.get((repo, script))
+            if not run:
+                return {'repo': repo, 'script': script, 'state': 'idle', 'next': 0}
+            try:
+                run.clear_at = os.path.getsize(run.log)
+            except OSError:
+                run.clear_at = 0
+            return dict(run.info(), next=run.clear_at)
+
     def summary(self):
-        return {r: run.info() for r, run in self.runs.items()}
+        out = {}
+        with self.lock:
+            runs = list(self.runs.items())
+        for (repo, script), run in runs:
+            row = out.setdefault(repo, {'state': run.state, 'scripts': {}, '_latest': run.state})
+            row['scripts'][script] = {'state': run.state}
+            row['_latest'] = run.state
+        for row in out.values():
+            row['state'] = 'running' if any(s['state'] == 'running' for s in row['scripts'].values()) else row['_latest']
+            del row['_latest']
+        return out

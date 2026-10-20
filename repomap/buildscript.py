@@ -16,39 +16,51 @@ from .parsers import parse_file, parse_vars, src_uri_refs, vars_dict
 from .util import bb_name, git, listdir, read_text
 
 SCRIPT = 'repomap_build_script.sh'
+USER_SCRIPTS = tuple('repomap_script_%d.sh' % n for n in range(1, 4))
 MAX_SIZE = 256 * 1024
 
 
 # ---------------------------------------------------------------- doc / ghi
 
-def script_path(ws, repo):
-    return ws.abs(repo, SCRIPT)
+def script_path(ws, repo, name=SCRIPT):
+    if name != SCRIPT and name not in USER_SCRIPTS:
+        raise ValueError('invalid script name')
+    return ws.abs(repo, name)
 
 
 def has_script(ws, repo):
     return os.path.isfile(script_path(ws, repo))
 
 
-def read_script(ws, repo):
-    text = read_text(script_path(ws, repo), MAX_SIZE)
+def read_script(ws, repo, name=SCRIPT):
+    text = read_text(script_path(ws, repo, name), MAX_SIZE)
     if text is None:
-        raise ValueError('%s not found in %s' % (SCRIPT, repo or '.'))
-    return {'repo': repo, 'name': SCRIPT, 'text': text}
+        raise ValueError('%s not found in %s' % (name, repo or '.'))
+    return {'repo': repo, 'name': name, 'text': text}
 
 
-def save_script(ws, repo, text):
+def delete_script(ws, repo, name=SCRIPT):
+    path = script_path(ws, repo, name)
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        raise ValueError('%s not found in %s' % (name, repo or '.'))
+    return {'repo': repo, 'name': name, 'deleted': True}
+
+
+def save_script(ws, repo, text, name=SCRIPT):
     text = str(text).replace('\r\n', '\n')
     if len(text.encode('utf-8')) > MAX_SIZE:
         raise ValueError('script is too big (max %d KB)' % (MAX_SIZE // 1024))
-    path = script_path(ws, repo)
+    path = script_path(ws, repo, name)
     with open(path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(text)
     try:
         os.chmod(path, 0o755)
     except OSError:
         pass
-    exclude_from_git(ws.abs(repo))
-    return {'repo': repo, 'name': SCRIPT, 'text': text, 'saved': time.strftime('%H:%M:%S')}
+    exclude_from_git(ws.abs(repo), name)
+    return {'repo': repo, 'name': name, 'text': text, 'saved': time.strftime('%H:%M:%S')}
 
 
 def create_script(ws, repo, overwrite=False):
@@ -57,19 +69,44 @@ def create_script(ws, repo, overwrite=False):
     return save_script(ws, repo, generate(ws, repo))
 
 
-def exclude_from_git(d):
+def custom_scripts(ws, repo):
+    return [{'name': name, 'slot': i + 1} for i, name in enumerate(USER_SCRIPTS)
+            if os.path.isfile(script_path(ws, repo, name))]
+
+
+def create_empty_script(ws, repo):
+    existing = {s['name'] for s in custom_scripts(ws, repo)}
+    for i, name in enumerate(USER_SCRIPTS):
+        if name in existing:
+            continue
+        path = script_path(ws, repo, name)
+        try:
+            with open(path, 'x', encoding='utf-8', newline='\n'):
+                pass
+        except FileExistsError:
+            continue
+        try:
+            os.chmod(path, 0o755)
+        except OSError:
+            pass
+        exclude_from_git(ws.abs(repo), name)
+        return {'repo': repo, 'name': name, 'slot': i + 1, 'text': '', 'saved': time.strftime('%H:%M:%S')}
+    raise ValueError('A repo can have up to 3 custom scripts.')
+
+
+def exclude_from_git(d, name=SCRIPT):
     """Them ten script vao .git/info/exclude (repo dung .git la file / symlink cua repo tool van dung)."""
     rel = (git(d, 'rev-parse', '--git-path', 'info/exclude', timeout=10) or '').strip()
     if not rel:
         return
     path = os.path.join(d, rel)
     old = read_text(path) or ''
-    if '/' + SCRIPT in old.split():
+    if '/' + name in old.split():
         return
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'a', encoding='utf-8', newline='\n') as f:
-            f.write(('' if not old or old.endswith('\n') else '\n') + '/' + SCRIPT + '\n')
+            f.write(('' if not old or old.endswith('\n') else '\n') + '/' + name + '\n')
     except OSError:
         pass
 
