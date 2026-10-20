@@ -167,8 +167,7 @@ export function attachScript(repo) {
 export function attachUserScript(repo, s) {
   let n = repo.children.find(c => c.customScript && c.scriptName === s.name);
   if (n) return n;
-  const slot = s.slot || +(s.name.match(/_(\d+)\.sh$/)?.[1] || 0);
-  n = node({ type: 'file', label: `Script ${slot}`, f: s.name, line: 0, grp: 'script', script: true,
+  n = node({ type: 'file', label: s.label || s.name, f: s.name, line: 0, grp: 'script', script: true,
     customScript: true, scriptName: s.name }, repo);
   repo.children.push(n);
   return n;

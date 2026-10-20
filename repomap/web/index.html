@@ -81,6 +81,19 @@
     </form>
   </dialog>
 
+  <dialog id="script-name-dialog" class="confirm-dialog">
+    <form class="script-name-form">
+      <label id="script-name-title" for="script-name-input"></label>
+      <input id="script-name-input" autocomplete="off" maxlength="80">
+      <div id="script-name-preview" class="script-name-preview muted"></div>
+      <div id="script-name-error" class="err" role="alert" hidden></div>
+      <div class="confirm-actions">
+        <button type="button" data-name-cancel data-i18n="cancel"></button>
+        <button type="button" class="confirm-yes" data-name-ok data-i18n="ok"></button>
+      </div>
+    </form>
+  </dialog>
+
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

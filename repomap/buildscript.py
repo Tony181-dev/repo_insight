@@ -16,16 +16,37 @@ from .parsers import parse_file, parse_vars, src_uri_refs, vars_dict
 from .util import bb_name, git, listdir, read_text
 
 SCRIPT = 'repomap_build_script.sh'
-USER_SCRIPTS = tuple('repomap_script_%d.sh' % n for n in range(1, 4))
+USER_PREFIX = 'repomap_'
+USER_NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$')
+USER_SCRIPT = re.compile(r'^repomap_[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.sh$')
 MAX_SIZE = 256 * 1024
+
+
+def _is_user_script(name):
+    return (isinstance(name, str) and name.casefold() != SCRIPT.casefold()
+            and USER_SCRIPT.fullmatch(name) and not name[:-3].endswith('.'))
 
 
 # ---------------------------------------------------------------- doc / ghi
 
 def script_path(ws, repo, name=SCRIPT):
-    if name != SCRIPT and name not in USER_SCRIPTS:
+    if name != SCRIPT and not _is_user_script(name):
         raise ValueError('invalid script name')
     return ws.abs(repo, name)
+
+
+def normalize_user_script_name(name):
+    name = str(name or '').strip()
+    if name.lower().endswith('.sh'):
+        name = name[:-3]
+    if name.lower().startswith(USER_PREFIX):
+        name = name[len(USER_PREFIX):]
+    if not USER_NAME.fullmatch(name) or name.endswith('.'):
+        raise ValueError('Use 1–64 letters, digits, dots, underscores or hyphens; start with a letter or digit.')
+    filename = USER_PREFIX + name + '.sh'
+    if filename.lower() == SCRIPT.lower():
+        raise ValueError('That name is reserved for the build script.')
+    return filename
 
 
 def has_script(ws, repo):
@@ -70,28 +91,57 @@ def create_script(ws, repo, overwrite=False):
 
 
 def custom_scripts(ws, repo):
-    return [{'name': name, 'slot': i + 1} for i, name in enumerate(USER_SCRIPTS)
-            if os.path.isfile(script_path(ws, repo, name))]
+    folder = ws.abs(repo)
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return []
+    return [{'name': name, 'label': name} for name in sorted(names, key=str.casefold)
+            if _is_user_script(name) and os.path.isfile(os.path.join(folder, name))]
 
 
-def create_empty_script(ws, repo):
-    existing = {s['name'] for s in custom_scripts(ws, repo)}
-    for i, name in enumerate(USER_SCRIPTS):
-        if name in existing:
-            continue
-        path = script_path(ws, repo, name)
-        try:
-            with open(path, 'x', encoding='utf-8', newline='\n'):
-                pass
-        except FileExistsError:
-            continue
-        try:
-            os.chmod(path, 0o755)
-        except OSError:
+def create_empty_script(ws, repo, name):
+    name = normalize_user_script_name(name)
+    existing = custom_scripts(ws, repo)
+    if len(existing) >= 3:
+        raise ValueError('A repo can have up to 3 custom scripts.')
+    if any(s['name'].casefold() == name.casefold() for s in existing):
+        raise ValueError('%s already exists in %s' % (name, repo or '.'))
+    path = script_path(ws, repo, name)
+    try:
+        with open(path, 'x', encoding='utf-8', newline='\n'):
             pass
-        exclude_from_git(ws.abs(repo), name)
-        return {'repo': repo, 'name': name, 'slot': i + 1, 'text': '', 'saved': time.strftime('%H:%M:%S')}
-    raise ValueError('A repo can have up to 3 custom scripts.')
+    except FileExistsError:
+        raise ValueError('%s already exists in %s' % (name, repo or '.'))
+    try:
+        os.chmod(path, 0o755)
+    except OSError:
+        pass
+    exclude_from_git(ws.abs(repo), name)
+    return {'repo': repo, 'name': name, 'label': name, 'text': '', 'saved': time.strftime('%H:%M:%S')}
+
+
+def rename_user_script(ws, repo, old_name, new_name):
+    if isinstance(old_name, str) and old_name.casefold() == SCRIPT.casefold():
+        raise ValueError('The build script cannot be renamed.')
+    old_path = script_path(ws, repo, old_name)
+    new_name = normalize_user_script_name(new_name)
+    if old_name.casefold() == new_name.casefold():
+        return {'repo': repo, 'oldName': old_name, 'name': old_name, 'label': old_name}
+    if not os.path.isfile(old_path):
+        raise ValueError('%s not found in %s' % (old_name, repo or '.'))
+    existing = custom_scripts(ws, repo)
+    if any(s['name'].casefold() == new_name.casefold() and s['name'] != old_name for s in existing):
+        raise ValueError('%s already exists in %s' % (new_name, repo or '.'))
+    new_path = script_path(ws, repo, new_name)
+    if os.path.exists(new_path):
+        raise ValueError('%s already exists in %s' % (new_name, repo or '.'))
+    try:
+        os.rename(old_path, new_path)
+    except FileExistsError:
+        raise ValueError('%s already exists in %s' % (new_name, repo or '.'))
+    exclude_from_git(ws.abs(repo), new_name)
+    return {'repo': repo, 'oldName': old_name, 'name': new_name, 'label': new_name}
 
 
 def exclude_from_git(d, name=SCRIPT):

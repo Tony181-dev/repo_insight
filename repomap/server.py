@@ -10,7 +10,7 @@
   GET /api/arch[?force=1]              -> kien truc tong: component theo tang (block view, ban gon)
   GET /api/archbox?id=BOX              -> chi tiet 1 khoi (file, phu thuoc cua tung component)
   GET /api/script?repo=PATH&name=FILE  -> noi dung build script hoac script rieng cua module
-  POST /api/script-create / script-empty-create / script-save -> tao va luu script
+  POST /api/script-create / script-empty-create / script-save / script-rename -> tao va luu script
   POST /api/build-start / build-stop / build-clear -> chay, dung, xoa log
   GET /api/build?repo=PATH&name=FILE&from=N -> trang thai + log tu byte N
   GET /api/builds                      -> trang thai script dang chay cua moi module
@@ -27,7 +27,7 @@ from urllib.parse import parse_qs, urlparse
 from . import __version__
 from .arch import box_detail, build_arch, slim_arch
 from .builds import Builds
-from .buildscript import (SCRIPT, create_empty_script, create_script, custom_scripts, has_script,
+from .buildscript import (SCRIPT, create_script, custom_scripts, has_script,
                           read_script, save_script)
 from .deepscan import deep_scan
 from .fileview import file_lines, file_view
@@ -131,9 +131,12 @@ def make_handler(ws, builds):
                 if ep == 'script-create':
                     return self._send(create_script(ws, repo, bool(body.get('overwrite'))))
                 if ep == 'script-empty-create':
-                    return self._send(create_empty_script(ws, repo))
+                    return self._send(builds.create_user_script(repo, body.get('name', '')))
                 if ep == 'script-delete':
                     result = builds.delete_script(repo, body.get('name') or SCRIPT)
+                    return self._send(result, code=409 if result.get('error') else 200)
+                if ep == 'script-rename':
+                    result = builds.rename_script(repo, body.get('name') or '', body.get('newName', ''))
                     return self._send(result, code=409 if result.get('error') else 200)
                 if ep == 'script-save':
                     return self._send(save_script(ws, repo, body.get('text', ''), body.get('name') or SCRIPT))

@@ -95,7 +95,7 @@ File được tìm theo thứ tự: `--config` > `$REPOMAP_CONFIG` > `./repomap.
 | 3 | Bấm file | Biến, module/target, tham chiếu đã resolve: `require/include/inherit`, `inherit-product`, `#include` dts và C/C++, `source` Kconfig, `add_subdirectory`, recipe ↔ bbappend, `SRC_URI` → repo trong manifest, Python `import`, GitLab CI `include`, Ansible role/`import_tasks`, Terraform module. Bấm tiếp để đi sâu. |
 | + | Bấm **Open full source** | Ở panel repo (cả repo) hoặc file (thư mục của module): cây thư mục nạp lười + nội dung có tô màu, tìm file theo tên, tìm nội dung (`git grep`), bấm tham chiếu để nhảy file. **← Back** (hoặc Esc / nút Back của trình duyệt) quay lại cây. |
 | + | Bấm **Create build script** | Ở panel repo: tạo `repomap_build_script.sh` ở gốc repo, đoán lệnh build theo loại module (xem dưới). File hiện thành node màu vàng đầu nhánh repo; bấm vào để sửa và **Save** (Ctrl+S) ngay trên giao diện, **Regenerate** để sinh lại. |
-| + | Bấm **Create script** | Tạo tối đa 3 script trống trong mỗi repo. Script hiện trên cây; bấm node để sửa, **Save** để lưu, **Run script** để chạy và **Stop** để dừng. Mỗi script có log riêng; **Clear log** xóa phần log cũ mà không dừng script đang chạy. |
+| + | Bấm **Create script** | Nhập tên để tạo tối đa 3 script trống trong mỗi repo; tool tự thêm tiền tố `repomap_` và đuôi `.sh`. Script hiện trên cây màu xanh ngọc (build script màu vàng), có thể đổi tên; bấm node để sửa, **Save** để lưu, **Run script** để chạy và **Stop** để dừng. Mỗi script có log riêng; **Clear log** xóa phần log cũ mà không dừng script đang chạy. |
 
 ### Build script
 

@@ -202,8 +202,9 @@ function scriptStatus(n) {
 function scriptPanel(n) {
   const s = n.sc, ro = store.data.noEdit;
   const name = n.scriptName || SCRIPT, title = n.customScript ? n.label : SCRIPT;
-  let h = header(n, title, `${n.repo}/${name}`).replace(/background:[^"]+/, 'background:#f0b429')
-    + tags([tag(t(n.customScript ? 'userScript' : 'buildScript'), '#f0b429'),
+  const scriptColor = n.customScript ? '#39c5cf' : '#f0b429';
+  let h = header(n, title, `${n.repo}/${name}`).replace(/background:[^"]+/, `background:${scriptColor}`)
+    + tags([tag(t(n.customScript ? 'userScript' : 'buildScript'), scriptColor),
       store.byRepo[n.repo] ? `<a class="tag lnk" data-a="repo" data-p="${esc(n.repo)}">${t('openRepo')}</a>` : '']);
   if (!s) return h + `<div class="load">${t('reading')}</div>`;
   if (s.error) return h + `<div class="err">${esc(s.error)}</div>`;
@@ -211,6 +212,7 @@ function scriptPanel(n) {
   const bd = n.bd, running = bd?.state === 'running', [bcls, bmsg] = statusText(bd, !!n.customScript), log = bd?.text || '';
   return h + `<div class="btns"><button class="pri" data-a="script-save"${off}>${t('save')}</button>
       ${n.customScript ? '' : `<button data-a="script-regen"${off}>${t('regenerate')}</button>`}
+      ${n.customScript ? `<button data-a="script-rename"${off}>${t('renameScript')}</button>` : ''}
       <button class="icon-btn delete-script" data-a="script-delete"${off} title="${esc(t('deleteScript'))}"
         aria-label="${esc(t('deleteScript'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-.9 14H5.9L5 6m4 4v6m6-6v6"/></svg></button>
       <span class="sc-st ${cls}" id="sc-st">${esc(msg)}</span>
@@ -291,7 +293,7 @@ export function bindPanel(actions) {
       case 'cat': return actions.cat(d.c);
       case 'src': return actions.src({ repo: d.repo, base: d.base, file: d.f });
       case 'line': return goLine(+d.n);
-      case 'script-create': case 'script-open': case 'script-user-create': case 'script-save': case 'script-regen': case 'script-delete':
+      case 'script-create': case 'script-open': case 'script-user-create': case 'script-save': case 'script-regen': case 'script-delete': case 'script-rename':
       case 'script-log-clear':
       case 'script-run': case 'script-stop':
         return actions.script(d.a.slice(7), a);

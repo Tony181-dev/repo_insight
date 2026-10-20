@@ -71,9 +71,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outli
 .nd.sel .halo { opacity: 1; }
 .nd.sel text { fill: #fff; font-weight: 700; }
 .nd:hover text { fill: var(--acc); }
-.nd.script text { fill: #f0b429; font-weight: 700; }
-.nd.script circle:not(.halo) { stroke: #f0b429; fill: #f0b42955 !important; }
-.nd.script .halo { stroke: #f0b429; stroke-dasharray: 3 2; opacity: .7; }
+.nd.script:not(.custom-script) text { fill: #f0b429; font-weight: 700; }
+.nd.script:not(.custom-script) circle:not(.halo) { stroke: #f0b429; fill: #f0b42955 !important; }
+.nd.script:not(.custom-script) .halo { stroke: #f0b429; stroke-dasharray: 3 2; opacity: .7; }
+.nd.script.custom-script text { fill: #39c5cf; font-weight: 700; }
+.nd.script.custom-script circle:not(.halo) { stroke: #39c5cf; fill: #39c5cf55 !important; }
+.nd.script.custom-script .halo { stroke: #39c5cf; stroke-dasharray: 3 2; opacity: .7; }
 .nd.script.sel .halo { stroke-dasharray: none; opacity: 1; }
 .lk { fill: none; stroke: var(--link); stroke-width: 1.3; }
 
@@ -175,6 +178,7 @@ body.resizing-panel { cursor: col-resize; user-select: none; }
   border: 1px solid var(--line); color: var(--fg); }
 .btns { display: flex; gap: 6px; margin: 10px 0 4px; flex-wrap: wrap; align-items: center; }
 button.script-btn { border-color: #f0b42999; color: #f0b429; }
+button.script-btn[data-a="script-user-create"] { border-color: #39c5cf99; color: #39c5cf; }
 .script-count { margin-left: 3px; font-size: 11px; opacity: .75; }
 .sc-st { font-size: 12px; color: var(--mute); margin-left: 4px; }
 .sc-st.dirty { color: #f0b429; }
@@ -208,6 +212,12 @@ button[hidden] { display: none; }
 .confirm-dialog::backdrop { background: #0009; }
 .confirm-dialog form { margin: 0; }
 .confirm-dialog p { margin: 0 0 20px; overflow-wrap: anywhere; }
+.script-name-form label { display: block; margin-bottom: 8px; }
+.script-name-form input { width: 100%; padding: 8px 10px; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 7px; font: 13px var(--mono); }
+.script-name-preview { margin-top: 6px; font: 11px var(--mono); overflow-wrap: anywhere; }
+.script-name-form .err { margin-top: 8px; font-size: 12px; }
+.script-name-form .confirm-actions { margin-top: 20px; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .confirm-yes { color: #fff; background: #da3633; border-color: #da3633; }
 .confirm-yes:hover { background: #f85149; border-color: #f85149; }

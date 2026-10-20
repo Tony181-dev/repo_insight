@@ -18,7 +18,8 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from .buildscript import SCRIPT, delete_script as remove_script_file, script_path
+from .buildscript import (SCRIPT, create_empty_script as create_user_script_file,
+                          delete_script as remove_script_file, rename_user_script, script_path)
 
 STOP_GRACE = 10           # giay cho build tu dung sau SIGTERM
 MAX_READ = 512 * 1024     # toi da moi lan doc log
@@ -171,6 +172,26 @@ class Builds:
                     os.remove(run.log)
                 except OSError:
                     pass
+            return result
+
+    def create_user_script(self, repo, name):
+        with self.lock:
+            return create_user_script_file(self.ws, repo, name)
+
+    def rename_script(self, repo, old_name, new_name):
+        key = (repo, old_name)
+        with self.lock:
+            run = self.runs.get(key)
+            if run and run.state == 'running':
+                return {'error': '%s is running in %s; stop it before renaming' % (old_name, repo or '.')}
+            result = rename_user_script(self.ws, repo, old_name, new_name)
+            if result['name'] != old_name:
+                self.runs.pop(key, None)
+                if run:
+                    try:
+                        os.remove(run.log)
+                    except OSError:
+                        pass
             return result
 
     def _wait(self, run):

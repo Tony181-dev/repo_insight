@@ -105,6 +105,70 @@ async function deepScan(n, btn) {
 
 // ---------------------------------------------------------------- build script (repomap_build_script.sh)
 
+const userScriptBase = value => {
+  let name = String(value ?? '').trim();
+  if (name.toLowerCase().endsWith('.sh')) name = name.slice(0, -3);
+  if (name.toLowerCase().startsWith('repomap_')) name = name.slice('repomap_'.length);
+  return name;
+};
+
+function askScriptName(initial = '') {
+  const dialog = $('#script-name-dialog'), input = $('#script-name-input');
+  const error = $('#script-name-error'), preview = $('#script-name-preview');
+  const form = dialog.querySelector('form');
+  const ok = dialog.querySelector('[data-name-ok]'), cancel = dialog.querySelector('[data-name-cancel]');
+  const updatePreview = () => {
+    const base = userScriptBase(input.value);
+    preview.textContent = t('scriptNamePreview', { name: base ? `repomap_${base}.sh` : 'repomap_<name>.sh' });
+    error.hidden = true;
+  };
+  $('#script-name-title').textContent = t('scriptNamePrompt');
+  input.placeholder = t('scriptNamePlaceholder');
+  input.value = userScriptBase(initial);
+  error.hidden = true;
+  updatePreview();
+  dialog.returnValue = '';
+  return new Promise(resolve => {
+    const cleanup = () => {
+      input.removeEventListener('input', updatePreview);
+      form.removeEventListener('submit', submit);
+      ok.removeEventListener('click', submit);
+      cancel.removeEventListener('click', cancelDialog);
+      dialog.removeEventListener('close', closed);
+    };
+    const closed = () => {
+      cleanup();
+      resolve(dialog.returnValue === 'ok' ? userScriptBase(input.value) : null);
+    };
+    const cancelDialog = () => dialog.close('cancel');
+    const submit = e => {
+      e?.preventDefault();
+      const base = userScriptBase(input.value);
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(base) || base.endsWith('.')) {
+        error.textContent = t('scriptNameInvalid');
+        error.hidden = false;
+        input.focus();
+        return;
+      }
+      if (`repomap_${base}.sh`.toLowerCase() === SCRIPT.toLowerCase()) {
+        error.textContent = t('scriptNameReserved');
+        error.hidden = false;
+        input.focus();
+        return;
+      }
+      dialog.close('ok');
+    };
+    input.addEventListener('input', updatePreview);
+    form.addEventListener('submit', submit);
+    ok.addEventListener('click', submit);
+    cancel.addEventListener('click', cancelDialog);
+    dialog.addEventListener('close', closed, { once: true });
+    dialog.showModal();
+    input.focus();
+    input.select();
+  });
+}
+
 async function scriptAction(what, btn) {
   const n = store.sel;
   if (!n) return;
@@ -128,19 +192,46 @@ async function scriptAction(what, btn) {
   if (what === 'user-create') {
     const repo = n.type === 'repo' ? n : store.byRepo[n.repo];
     if (!repo?.ins) return;
+    const name = await askScriptName();
+    if (name === null) return;
     repo.scErr = '';
     btn.disabled = true;
     btn.textContent = t('creating');
-    const r = await post('script-empty-create', { repo: repo.path });
+    const r = await post('script-empty-create', { repo: repo.path, name });
     btn.disabled = false;
     if (r.error) { repo.scErr = r.error; return showPanel(repo, true); }
     repo.ins.scripts ||= [];
-    repo.ins.scripts.push({ name: r.name, slot: r.slot });
+    repo.ins.scripts.push({ name: r.name, label: r.label });
     const sn = attachUserScript(repo, r);
     sn.sc = r;
     repo.open = true;
     render();
     return clickNode(sn, true);
+  }
+  if (what === 'rename') {
+    if (!n.customScript) return;
+    const newName = await askScriptName(n.scriptName);
+    if (newName === null) return;
+    if (btn) btn.disabled = true;
+    const oldName = n.scriptName;
+    const r = await post('script-rename', { repo: n.repo, name: oldName, newName });
+    if (btn) btn.disabled = false;
+    if (r.error) { n.sc.saveErr = r.error; return scriptStatusRefresh(n); }
+    if (r.name === oldName) return;
+    const repo = store.byRepo[n.repo];
+    n.scriptName = n.f = n.label = r.name;
+    n.sc.name = r.name;
+    n.sc.saveErr = '';
+    repo.ins.scripts = (repo.ins.scripts || []).map(s => s.name === oldName ? { ...s, name: r.name, label: r.label } : s);
+    const runs = store.builds?.[n.repo]?.scripts;
+    if (runs) {
+      delete runs[oldName];
+      if (!Object.keys(runs).length) delete store.builds[n.repo];
+    }
+    n.bd = { state: 'idle', text: '', next: 0 };
+    render();
+    showPanel(n, true);
+    return;
   }
   if (what === 'log-clear') {
     btn.disabled = true;
