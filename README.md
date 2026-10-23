@@ -137,6 +137,19 @@ làm bẩn `git status`. Đổi tên (**Rename**, vd `repomap_build_yocto.sh`): 
 
 ### Block view
 
+Block view nhận diện các khối VM / repo gốc theo thư mục Android/AOSP, QNX, Linux/Yocto,
+ranh giới `.repo/manifest.xml`, repo Git độc lập và dấu hiệu từ file build. Quét thư mục cha chứa nhiều
+workspace `.repo` cũng đọc được manifest của từng workspace. Các khối là phạm vi source được nhận diện,
+không xác nhận VM đang chạy trên hypervisor.
+
+- **Một khối:** mở thẳng các tầng như trước.
+- **Hai khối trở lên:** mặc định hiện các khối Android, QNX, Linux hoặc tên repo gốc; bấm khối để xem các tầng,
+  bấm **← VMs / roots** để quay lại. Hai root cùng OS vẫn là hai khối riêng, có tên root để phân biệt.
+- Repo chưa rõ VM trong workspace hỗn hợp nằm ở **Shared / workspace**. Kernel Linux trong root Android
+  thuộc khối Android. Phụ thuộc trùng tên và thư viện ngoài được phân biệt theo từng khối.
+- Bảy tầng dưới đây là các nhóm phân loại chung, không phải bảy tầng bắt buộc của Linux; chỉ hiện tầng có dữ liệu
+  của khối đang chọn. Style, màu tầng, zoom/pan và panel chi tiết giữ cùng cách hoạt động.
+
 Mỗi khối = 1 repo trong 1 tầng (App, Lib, HAL/nền tảng, External, Kernel, Board, Build). Cách xếp tầng và nối:
 
 - Gợi ý HAL theo đường dẫn / tên (`hal/`, `hardware/`, `drivers/`, `*-hal`…) chỉ áp dụng cho code native (C/C++,

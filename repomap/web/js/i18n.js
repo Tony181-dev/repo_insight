@@ -59,8 +59,15 @@ const DICT = {
     pickFile: 'Pick a file on the left.', outline: 'Outline',
     viewTitle: 'Switch view', viewTree: 'Tree', viewBlocks: 'Blocks',
     archFilter: 'Filter repo or component…', archLoading: 'Detecting components in every repo…',
+    archScopes: 'VMs / repository roots', archBack: '← VMs / roots', archShared: 'Shared / workspace',
+    archPickScope: 'Choose a block to explore its architecture.', archOpenScope: 'Explore layers',
+    archScopeFilter: 'Filter VM, root or component…', archScopeStat: '{n} VM / root blocks · {r} repos',
+    archScopeCount: '{r} repos · {b} blocks · {c} components',
+    archLayerHint: 'Detected layers within this scope; empty layers are hidden.',
     archStat: '{b} blocks, {c} components, {r} repos, {s}s', archCount: '{b} blocks · {c} components',
-    archHelp: 'Architecture of the whole workspace, detected from build and service files.<br><br>' +
+    archHelp: 'Architecture detected from build and service files.<br><br>' +
+      '• Multiple VMs / repository roots: choose a block first; use ← VMs / roots to return. A single scope opens its layers directly.<br>' +
+      '• The seven bands are shared categories, not seven mandatory Linux layers. Only detected layers of the selected scope appear.<br>' +
       '• Each band is a layer: applications/services, libraries, platform/HAL, external libraries, kernel/drivers, ' +
       'board/BSP, build/tooling<br>• Each block is one repo in that layer, with the components found in it<br>' +
       '• Blocks are collapsed: click one to open it and draw its links (green = what it uses, ' +
@@ -140,8 +147,15 @@ const DICT = {
     pickFile: 'Chọn một file bên trái.', outline: 'Cấu trúc',
     viewTitle: 'Đổi kiểu xem', viewTree: 'Cây', viewBlocks: 'Khối',
     archFilter: 'Lọc repo hoặc component…', archLoading: 'Đang nhận diện component trong mọi repo…',
+    archScopes: 'VM / repo gốc', archBack: '← VM / repo gốc', archShared: 'Dùng chung / workspace',
+    archPickScope: 'Chọn một khối để xem kiến trúc bên trong.', archOpenScope: 'Xem các tầng',
+    archScopeFilter: 'Lọc VM, repo gốc hoặc component…', archScopeStat: '{n} khối VM / repo gốc · {r} repo',
+    archScopeCount: '{r} repo · {b} khối · {c} component',
+    archLayerHint: 'Các tầng nhận diện trong khối này; ẩn tầng không có dữ liệu.',
     archStat: '{b} khối, {c} component, {r} repo, {s}s', archCount: '{b} khối · {c} component',
-    archHelp: 'Kiến trúc tổng của workspace, tự nhận diện từ file build và file service.<br><br>' +
+    archHelp: 'Kiến trúc tự nhận diện từ file build và file service.<br><br>' +
+      '• Có nhiều VM / repo gốc: chọn khối trước, bấm ← VM / repo gốc để quay lại. Một khối thì mở thẳng các tầng.<br>' +
+      '• Bảy dải là các nhóm dùng chung, không phải bảy tầng bắt buộc của Linux. Chỉ hiện tầng có dữ liệu trong khối đang chọn.<br>' +
       '• Mỗi dải là một tầng: ứng dụng/service, thư viện, nền tảng/HAL, thư viện ngoài, kernel/driver, ' +
       'board/BSP, build/công cụ<br>• Mỗi khối là một repo trong tầng đó, kèm các component tìm được<br>' +
       '• Khối được thu gọn: bấm vào để mở và vẽ liên kết (xanh = khối đó dùng gì, ' +

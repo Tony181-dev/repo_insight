@@ -102,6 +102,24 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outli
 #arch-follow[aria-pressed="true"] { background: #1f6feb; border-color: #1f6feb; color: #fff; }
 #arch-links { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 3; }
 .arch-none { padding: 40px; text-align: center; }
+.arch-context { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 8px 14px;
+  border-bottom: 1px solid var(--line); background: var(--bg2); font-size: 12px; }
+.arch-context [hidden] { display: none; }
+.arch-context b { color: var(--fg); }
+.vm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 14px; }
+.vm-grid .vm-card { display: flex; flex-direction: column; align-items: stretch; gap: 12px; text-align: left;
+  min-width: 0; max-width: none; padding: 18px; color: var(--fg); font: inherit; }
+.vm-card:focus-visible { outline: 2px solid var(--lc); outline-offset: 3px; }
+.vm-card .abox-hd { margin: 0; }
+.vm-card .abox-hd b { font-size: 18px; white-space: normal; overflow-wrap: anywhere; }
+.vm-card .car { margin-left: auto; }
+.vm-root { font: 11.5px var(--mono); color: var(--mute); overflow-wrap: anywhere; }
+.vm-count { font-size: 12px; color: var(--mute); }
+.vm-layers { display: flex; flex-wrap: wrap; gap: 5px; }
+.vm-layers .lchip { border: 1px solid var(--line); background: var(--bg3); }
+.vm-open { color: var(--lc); font-size: 12px; }
+#arch-canvas.far .vm-card .abox-hd b { font-size: 30px; }
+@media (max-width: 640px) { .vm-grid { grid-template-columns: 1fr; } }
 .band { display: grid; grid-template-columns: 180px 1fr; border: 1px solid; border-radius: 10px; }
 .band-hd { padding: 12px 14px; border-right: 1px solid var(--line); display: flex; flex-direction: column; }
 .band-title { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 4px; }

@@ -5,7 +5,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from .classify import classify
-from .manifest import discover_repos, parse_manifest
+from .manifest import discover_projects
 from .util import NOWALK, bb_name, git, listdir
 
 
@@ -35,10 +35,7 @@ class Workspace:
     # ---------------- tang 0
     def load(self):
         t0 = time.time()
-        ps = parse_manifest(self.root)
-        self.mode = 'manifest' if ps is not None else 'scan'
-        if ps is None:
-            ps = [{'name': p, 'path': p, 'groups': ''} for p in discover_repos(self.root)]
+        self.mode, ps = discover_projects(self.root)
         with ThreadPoolExecutor(self.workers) as ex:
             for p, (kind, tags) in zip(ps, ex.map(lambda p: classify(self.abs(p['path'])), ps)):
                 p['kind'], p['tags'] = kind, tags

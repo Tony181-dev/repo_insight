@@ -102,3 +102,33 @@ def discover_repos(root, max_depth=6):
         if rel.count('/') + 1 >= max_depth:
             dns[:] = []
     return found
+
+
+def discover_projects(root, max_depth=6):
+    """Find independent manifest roots as well as Git roots in a scan folder.
+
+    Stop at each manifest/Git boundary so AOSP's thousands of child repos are
+    read from its manifest, rather than traversed a second time.
+    """
+    projects, manifests = [], 0
+    for dp, dns, fns in os.walk(root):
+        rel = os.path.relpath(dp, root).replace(os.sep, '/')
+        ps = parse_manifest(dp) if '.repo' in dns else None
+        if ps is not None:
+            manifests += 1
+            for p in ps:
+                p = dict(p, scan_root=rel)
+                if rel != '.':
+                    p['path'] = rel + '/' + p['path']
+                projects.append(p)
+            dns[:] = []
+            continue
+        if '.git' in dns or '.git' in fns:
+            projects.append({'name': rel, 'path': rel, 'groups': '', 'scan_root': rel})
+            if rel != '.':
+                dns[:] = []
+                continue
+        dns[:] = [d for d in dns if d not in NOWALK and not d.startswith(('tmp', 'build-'))]
+        if rel.count('/') + 1 >= max_depth:
+            dns[:] = []
+    return ('manifest' if manifests else 'scan'), projects

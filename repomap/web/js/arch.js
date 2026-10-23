@@ -1,4 +1,5 @@
-// Block view: kien truc tong cua workspace. Moi dai = 1 tang (app / lib / HAL / ext / kernel / board / build),
+// Block view: chon VM/root neu co nhieu pham vi; 1 pham vi mo thang cac tang.
+// Moi dai = 1 tang (app / lib / HAL / ext / kernel / board / build),
 // moi khoi = 1 repo trong 1 tang, ben trong la cac component tu nhan dien (/api/arch).
 // Mac dinh khoi thu gon (ten + tom tat so component theo loai); bam khoi: mo ra, ve phu thuoc (dung / bi dung),
 // lam mo cac khoi khac, hien chi tiet o panel. Cuon chuot de zoom, keo de di chuyen tu do (nhu cay).
@@ -24,7 +25,7 @@ const ICON = {
 };
 const ICON_ORDER = Object.keys(ICON);
 
-let data = null, sel = null, loading = false;
+let data = null, sel = null, loading = false, activeScope = null;
 let view = { x: 0, y: 0, k: 1 }, animId = 0;
 const FOLLOW_KEY = 'repomap-arch-follow';
 let follow = true;                       // bam khoi -> truot khoi vao giua khung nhin
@@ -39,6 +40,50 @@ const color = b => (b.kind === 'ext' ? LAYER_COLOR.ext : KIND_COLOR[b.kind] || '
 const ctype = c => (c.svc ? 'svc' : c.type);
 const typeName = c => t('type_' + ctype(c));
 const parent = p => (p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '');
+const scopes = () => data?.scopes || [];
+const overview = () => scopes().length > 1 && !activeScope;
+const scopeBoxes = () => data.boxes.filter(b => !activeScope || b.scope === activeScope);
+const scopeLabel = s => s.platform === 'Shared' ? s.label.replace('Shared / workspace', t('archShared')) : s.label;
+
+function enterScope(id) {
+  activeScope = id;
+  sel = null;
+  hidden.clear(); opened.clear();
+  for (const L in shown) delete shown[L];
+  Q.value = '';
+  animId++;
+  view = { x: 0, y: 0, k: 1 };
+  render(); showInfo();
+}
+
+function renderContext() {
+  const home = overview(), current = scopes().find(s => s.id === activeScope);
+  $('#arch-back').hidden = home || scopes().length < 2;
+  $('#arch-back').textContent = t('archBack');
+  $('#arch-scope').textContent = home ? t('archScopes') : current ? scopeLabel(current) : '';
+  $('#arch-scope').title = current?.root || '';
+  $('#arch-hint').textContent = t(home ? 'archPickScope' : 'archLayerHint');
+  for (const id of ['arch-open', 'arch-close', 'arch-follow']) $('#' + id).hidden = home;
+  Q.placeholder = t(home ? 'archScopeFilter' : 'archFilter');
+}
+
+function scopeCards(q) {
+  const visible = scopes().filter(s => (scopeLabel(s) + ' ' + s.root).toLowerCase().includes(q)
+    || data.boxes.some(b => b.scope === s.id && matches(b, q)));
+  return `<div class="vm-grid">${visible.map(s => {
+    const boxes = data.boxes.filter(b => b.scope === s.id);
+    const c = LAYER_COLOR[{ Android: 'app', QNX: 'hal', Linux: 'board' }[s.platform] || 'build'];
+    return `<button type="button" class="abox vm-card" data-scope="${esc(s.id)}"
+      style="--lc:${c};--lb:${c}4d;--lg:${c}66">
+      <span class="abox-hd"><span class="dot" style="background:${c}"></span><b>${esc(scopeLabel(s))}</b><i class="car">▸</i></span>
+      <span class="vm-root">${esc(s.root)}</span>
+      <span class="vm-count">${esc(t('archScopeCount', { r: s.repos, b: boxes.length,
+        c: boxes.reduce((n, b) => n + b.total, 0) }))}</span>
+      <span class="vm-layers">${data.layers.filter(L => boxes.some(b => b.layer === L.id)).map(L =>
+        `<span class="lchip"><span class="dot" style="background:${LAYER_COLOR[L.id]}"></span>${esc(t('layerShort_' + L.id))}</span>`).join('')}</span>
+      <span class="vm-open">${t('archOpenScope')} →</span></button>`;
+  }).join('') || `<div class="muted arch-none">${t('noMatch')}</div>`}</div>`;
+}
 
 function index() {
   byId = new Map(data.boxes.map(b => [b.id, b]));
@@ -92,11 +137,13 @@ function matches(b, q) {
 
 function render() {
   if (!data) return;
+  renderContext();
   const q = Q.value.trim().toLowerCase();
+  const home = overview(), scoped = scopeBoxes();
   let h = '', nb = 0, nc = 0;
-  for (const L of data.layers) {
+  for (const L of home ? [] : data.layers) {
     if (hidden.has(L.id)) continue;
-    const boxes = data.boxes.filter(b => b.layer === L.id && matches(b, q))
+    const boxes = scoped.filter(b => b.layer === L.id && matches(b, q))
       .sort((x, y) => y.score - x.score || x.repo.localeCompare(y.repo));
     if (!boxes.length) continue;
     const c = LAYER_COLOR[L.id], comps = boxes.reduce((s, b) => s + b.total, 0);
@@ -112,10 +159,12 @@ function render() {
         boxes.length > lim ? moreBtn(L.id, boxes.length - lim) : ''}</div>
       <div class="band-body">${vis.map(b => boxHtml(b, q)).join('')}</div></section>`;
   }
-  CANVAS.innerHTML = `<svg id="arch-links"></svg>` + (h || `<div class="muted arch-none">${t('noMatch')}</div>`);
-  const errs = data.errors || [];
-  STAT.textContent = t('archStat', { b: nb, c: nc, r: data.repos, s: data.took })
-    + (errs.length ? ' · ' + t('archErrors', { n: errs.length }) : '');
+  CANVAS.innerHTML = `<svg id="arch-links"></svg>` + (home ? scopeCards(q) : h || `<div class="muted arch-none">${t('noMatch')}</div>`);
+  const current = scopes().find(s => s.id === activeScope);
+  const errs = (data.errors || []).filter(e => !current || current.paths.includes(e.repo));
+  STAT.textContent = home ? t('archScopeStat', { n: scopes().length, r: data.repos })
+    : t('archStat', { b: nb, c: nc, r: current?.repos ?? data.repos, s: data.took });
+  STAT.textContent += (errs.length ? ' · ' + t('archErrors', { n: errs.length }) : '');
   STAT.title = errs.map(e => `${e.repo}: ${e.error}`).join('\n');
   STAT.classList.toggle('err', errs.length > 0);
   renderLayers();
@@ -125,7 +174,7 @@ function render() {
 }
 
 function renderLayers() {
-  $('#arch-layers').innerHTML = data.layers.filter(L => data.boxes.some(b => b.layer === L.id)).map(L =>
+  $('#arch-layers').innerHTML = (overview() ? [] : data.layers).filter(L => scopeBoxes().some(b => b.layer === L.id)).map(L =>
     `<button class="lchip${hidden.has(L.id) ? ' off' : ''}" data-l="${L.id}" title="${esc(layerName(L.id))}">
       <span class="dot" style="background:${LAYER_COLOR[L.id]}"></span>${esc(t('layerShort_' + L.id))}</button>`).join('');
 }
@@ -181,7 +230,7 @@ function drawLinks() {
 // canvas giu be rong bang khung nhin, dat tu do bang transform (keo / zoom khong bi gioi han nhu thanh cuon)
 // be rong canvas = khung nhin; zoom xa (chu to) thi dan rong gap 1/FAR de van lap day man hinh, khong thanh cot hep
 function setWidth() {
-  const w = Math.max(600, STAGE.clientWidth);
+  const w = overview() ? STAGE.clientWidth : Math.max(600, STAGE.clientWidth);
   CANVAS.style.width = (CANVAS.classList.contains('far') ? w / FAR : w) + 'px';
 }
 
@@ -319,6 +368,8 @@ function showInfo() {
 // chon khoi (mo ra luon). Bat "tu can giua": luon truot khoi vao giua; tat: chi khi chon tu panel / tim kiem
 // (scroll=true) ma khoi dang nam ngoai man hinh
 function select(id, scroll = false) {
+  const target = byId.get(id);
+  if (target && target.scope !== activeScope) enterScope(target.scope);
   sel = id && byId.has(id) ? id : null;
   if (sel) opened.add(sel);
   render();
@@ -340,7 +391,7 @@ function clickBox(id) {
   select(id);
 }
 
-// thu gon tat ca = ve view mac dinh: dong moi khoi, bo chon, moi tang lai chi hien PAGE khoi, fit khung nhin
+// thu gon tat ca trong VM/root hien tai: dong khoi, bo chon, moi tang lai hien PAGE khoi, fit khung nhin
 function collapseAll() {
   opened.clear();
   sel = null;
@@ -363,6 +414,8 @@ async function load(force = false) {
   $('#arch-rescan').disabled = false;
   if (d.error) { CANVAS.innerHTML = `<div class="err arch-none">${esc(d.error)}</div>`; return; }
   data = d;
+  if (scopes().length === 1) activeScope = scopes()[0].id;
+  else if (!scopes().some(s => s.id === activeScope)) activeScope = null;
   details.clear();
   index();
   if (sel && !byId.has(sel)) sel = null;
@@ -389,8 +442,11 @@ export function archFocusRepo(path) {
 
 export function initArch() {
   bindPan();
+  $('#arch-back').addEventListener('click', () => { enterScope(null); $('#arch-q').focus(); });
   CANVAS.addEventListener('click', e => {
     if (moved) return;                                   // vua keo, khong phai bam
+    const vm = e.target.closest('[data-scope]');
+    if (vm) { enterScope(vm.dataset.scope); $('#arch-q').focus(); return; }
     const m = e.target.closest('[data-more],[data-all]');
     if (m) {
       const L = m.dataset.more || m.dataset.all;
@@ -413,10 +469,14 @@ export function initArch() {
   ZOOM.addEventListener('click', () => zoomAt(1));
   $('#arch-follow').addEventListener('click', () => setFollow(!follow));
   setFollow(follow);
-  $('#arch-open').addEventListener('click', () => { data?.boxes.forEach(b => opened.add(b.id)); render(); });
+  $('#arch-open').addEventListener('click', () => { if (data) scopeBoxes().forEach(b => opened.add(b.id)); render(); });
   $('#arch-close').addEventListener('click', collapseAll);
   let typing = 0;                                       // go loc: doi go xong moi ve lai (hang nghin khoi)
   Q.addEventListener('input', () => { clearTimeout(typing); typing = setTimeout(render, 180); });
   $('#arch-rescan').addEventListener('click', () => load(true));
   addEventListener('resize', () => { if (!A.hidden && data) render(); });
+  // The details panel changes the available width without a window resize.
+  new ResizeObserver(() => {
+    if (!A.hidden && data) { setWidth(); drawLinks(); }
+  }).observe(STAGE);
 }

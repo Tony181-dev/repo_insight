@@ -4,8 +4,8 @@ board/BSP, build/tooling - roi gom thanh khoi theo tang va noi phu thuoc giua ca
 Phan tich tinh, chi doc file build / service: CMake, Meson, Autotools, Make/Kbuild, Android.bp/.mk, QNX, Bazel,
 Go, Cargo, npm, Gradle/Maven, Python, Yocto, Docker/Compose, systemd, init .rc / init.d, CI, Terraform, Ansible, Helm.
 
-Ket qua: {'layers': [{id, label}],
-          'boxes': [{id, repo, layer, kind, label, total, comps: [{name, type, f, n, note?, svc?, deps?}]}],
+Ket qua: {'scopes': [{id, label, platform, root, repos, paths}], 'layers': [{id, label}],
+          'boxes': [{id, repo, scope, layer, kind, label, total, comps: [{name, type, f, n, note?, svc?, deps?}]}],
           'edges': [[box_tu, box_den, so_lien_ket, 'use'|'build']], 'took', 'repos', 'comps'}
 """
 import hashlib
@@ -18,6 +18,7 @@ import traceback
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
+from .arch_scope import architecture_scopes
 from .fileview import resolve_ref
 from .parsers import bp_modules, logical_lines, mk_modules, parse_vars, src_uri_refs, vars_dict
 from .parsers_devops import yaml_children
@@ -868,6 +869,11 @@ def _save_cache(path, entries):
 def build_arch(ws, refresh=False):
     """refresh=True (nut Rescan): bo qua cache, quet lai moi repo."""
     t0 = time.time()
+    scopes, scope_of = architecture_scopes(ws)
+    # Match names only inside the same source scope. Explicit recipe build
+    # references can still cross scopes because they identify actual repo paths.
+    scope = lambda repo: scope_of.get(repo, '')  # noqa: E731
+    ext_id = lambda sid, eco: 'ext#' + (sid + '#' if len(scopes) > 1 else '') + eco  # noqa: E731
     errors, entries, hits = [], {}, [0]
     cpath = cache_file(ws)
     cache = {} if refresh else _load_cache(cpath)
@@ -901,22 +907,22 @@ def build_arch(ws, refresh=False):
                 comps.append(dict(c, deps=list(c['deps'])))      # ban sao: buoc gop sua component, cache giu nguyen
         svcs += [(p['path'],) + tuple(s) for s in rsvcs]
         for k, v in rdflt.items():
-            dflt.setdefault(k, v)
-        bbs += rbb
+            dflt.setdefault((scope(p['path']), k), v)
+        bbs += [(scope(p['path']), pn, targets, deps) for pn, targets, deps in rbb]
     for c in comps:
         _refine(c)
 
     # Android *_defaults: deps khai bao trong defaults (ca defaults long nhau, o repo khac) thuoc ve module dung no
-    def inherited(name, seen):
-        if name in seen or name not in dflt:
+    def inherited(sid, name, seen):
+        if name in seen or (sid, name) not in dflt:
             return []
         seen.add(name)
-        deps, parents = dflt[name]
-        return list(deps) + [d for x in parents for d in inherited(x, seen)]
+        deps, parents = dflt[sid, name]
+        return list(deps) + [d for x in parents for d in inherited(sid, x, seen)]
     for c in comps:
         seen = set()
         for x in c.get('dflt', ()):
-            c['deps'] += inherited(x, seen)
+            c['deps'] += inherited(scope(c['repo']), x, seen)
 
     # service (systemd / init) -> danh dau binary tuong ung la service, khong thi tao component rieng.
     # Binary nam o .../bin/hw/, /vendor/... (theo init .rc) -> tang HAL / nen tang, du file build nam o dau.
@@ -926,6 +932,7 @@ def build_arch(ws, refresh=False):
             exes[c['name'].lower()].append(c)
     for repo, unit, exe, rel, ln, path, need in svcs:
         cands = exes.get(exe.lower()) or exes.get(unit.lower()) or []
+        cands = [c for c in cands if scope(c['repo']) == scope(repo)]
         cands = [c for c in cands if c['repo'] == repo] or cands
         hint = _svc_layer(path)
         if cands:
@@ -944,7 +951,7 @@ def build_arch(ws, refresh=False):
             comps.append(c)
         else:
             continue
-        units.setdefault(unit.lower(), c)
+        units.setdefault((scope(repo), unit.lower()), c)
         if need:
             needs.append((c, need))
 
@@ -953,7 +960,7 @@ def build_arch(ws, refresh=False):
     for c in comps:
         if c['type'] not in NO_INDEX:
             for k in set().union(_keys(c['name'], c['eco']), *(_keys(a, c['eco']) for a in c.get('alias', ()))):
-                idx[(_group(c['eco']), k)].append(c)
+                idx[(scope(c['repo']), _group(c['eco']), k)].append(c)
 
     bid = lambda c: c['repo'] + '#' + c['layer']  # noqa: E731
     size, by_repo = Counter(bid(c) for c in comps), defaultdict(set)
@@ -977,16 +984,17 @@ def build_arch(ws, refresh=False):
             edges[(bid(c), bid(t), kind)] += 1
 
     pn_repos = defaultdict(set)                          # recipe Yocto -> repo trong workspace ma no build
-    for pn, targets, _ in bbs:
-        pn_repos[pn].update(targets)
+    for sid, pn, targets, _ in bbs:
+        pn_repos[sid, pn].update(targets)
 
     for c in comps:
         for d in dict.fromkeys(c['deps']):
-            cands = [x for k in _keys(d, c['eco']) for x in idx.get((_group(c['eco']), k), []) if x is not c]
+            cands = [x for k in _keys(d, c['eco'])
+                     for x in idx.get((scope(c['repo']), _group(c['eco']), k), []) if x is not c]
             if cands:
                 link(c, _pick(c, cands))
-            elif c['eco'] == 'yocto' and d in pn_repos:   # recipe -> recipe build tu repo trong workspace
-                for y in sorted(pn_repos[d]):
+            elif c['eco'] == 'yocto' and (scope(c['repo']), d) in pn_repos:
+                for y in sorted(pn_repos[scope(c['repo']), d]):
                     b = main_box(y)
                     if b and b != bid(c):
                         edges[(bid(c), b, 'use')] += 1
@@ -994,31 +1002,33 @@ def build_arch(ws, refresh=False):
             elif c['eco'] in ECO_LABEL:
                 name = _ext_name(c['eco'], d)
                 eco = 'c' if c['eco'] == 'android' and name.startswith('C/C++') else c['eco']
-                ext[eco][name] += 1
-                edges[(bid(c), 'ext#' + eco, 'use')] += 1
-                c.setdefault('uses', []).append([name, 'ext#' + eco])
+                sid = scope(c['repo'])
+                ext[sid, eco][name] += 1
+                edges[(bid(c), ext_id(sid, eco), 'use')] += 1
+                c.setdefault('uses', []).append([name, ext_id(sid, eco)])
         for repo in c['builds']:
             for b in by_repo.get(repo, ()):
                 if b != bid(c):
                     edges[(bid(c), b, 'build')] += 1
 
     # recipe Yocto build repo X, DEPENDS recipe build repo Y (hoac recipe / thu vien khac) -> X dung Y
-    for pn, targets, deps in bbs:
+    for sid, pn, targets, deps in bbs:
         for x in targets:
             src = main_box(x)
             if not src:
                 continue
             for d in deps:
-                dst = {main_box(y) for y in pn_repos.get(d, ()) if y != x}
+                dst = {main_box(y) for y in pn_repos.get((sid, d), ()) if y != x}
                 if not dst:
-                    cands = [t for k in _keys(d, 'yocto') for t in idx.get(('native', k), []) if t['repo'] != x]
+                    cands = [t for k in _keys(d, 'yocto')
+                             for t in idx.get((scope(x), 'native', k), []) if t['repo'] != x]
                     dst = {bid(_pick({'repo': x, 'eco': 'yocto'}, cands))} if cands else set()
                 for b in dst - {None, src}:
                     edges[(src, b, 'use')] += 1
     # service can service khac (Requires= / Wants=)
     for c, need in needs:
         for u in need:
-            t = units.get(u.lower())
+            t = units.get((scope(c['repo']), u.lower()))
             if t is not None and t is not c:
                 link(c, t)
     # file .rc / .service o repo A khoi chay binary cua repo B
@@ -1042,10 +1052,13 @@ def build_arch(ws, refresh=False):
             if c.get(k):
                 out[k] = list(dict((tuple(x), x) for x in c[k]).values())[:30]
         b['comps'].append(out)
-    for eco, cnt in ext.items():
-        boxes['ext#' + eco] = {'id': 'ext#' + eco, 'repo': '', 'layer': 'ext', 'kind': 'ext', 'label': ECO_LABEL[eco],
+    for (sid, eco), cnt in ext.items():
+        boxes[ext_id(sid, eco)] = {'id': ext_id(sid, eco), 'scope': sid,
+                               'repo': '', 'layer': 'ext', 'kind': 'ext', 'label': ECO_LABEL[eco],
                                'comps': [{'name': n, 'type': 'ext', 'note': '%d' % k} for n, k in cnt.most_common()]}
     for b in boxes.values():
+        if b['repo']:
+            b['scope'] = scope(b['repo'])
         if b['layer'] != 'ext' or b['repo']:
             # binary chay nhu service truoc, roi unit service khong co binary, chuong trinh, thu vien...
             b['comps'].sort(key=lambda x: (-1 if x.get('svc') and x['type'] != 'svc' else TYPE_ORDER.get(x['type'], 5),
@@ -1054,7 +1067,7 @@ def build_arch(ws, refresh=False):
         b['n'] = dict(Counter('svc' if c.get('svc') else c['type'] for c in b['comps']))   # tom tat khi thu gon
         b['comps'] = b['comps'][:MAX_EXT if b['layer'] == 'ext' else MAX_COMPS]
 
-    return {'layers': [{'id': k, 'label': v} for k, v in LAYERS],
+    return {'scopes': scopes, 'layers': [{'id': k, 'label': v} for k, v in LAYERS],
             'boxes': sorted(boxes.values(), key=lambda b: (order[b['layer']], b['repo'], b['label'])),
             'edges': [[a, b, n, k] for (a, b, k), n in sorted(edges.items())],
             'repos': len(ws.repos), 'comps': len(comps), 'took': round(time.time() - t0, 2),
@@ -1068,7 +1081,7 @@ def slim_arch(a):
     """Ban gon cho giao dien: moi component chi con ten / loai (/ ghi chu ngan). Chi tiet: box_detail()."""
     boxes = []
     for b in a['boxes']:
-        s = {k: b[k] for k in ('id', 'repo', 'layer', 'kind', 'label', 'total', 'n')}
+        s = {k: b[k] for k in ('id', 'repo', 'layer', 'kind', 'label', 'total', 'n', 'scope')}
         s['comps'] = [dict({'name': c['name'], 'type': c['type']}, **({'svc': 1} if c.get('svc') else {}),
                            **({'note': c['note']} if c.get('note') and len(c['note']) < 40 else {}))
                       for c in b['comps'][:SLIM_COMPS]]

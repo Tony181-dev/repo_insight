@@ -209,6 +209,8 @@ class WorkspaceTest(unittest.TestCase):
         a = build_arch(self.ws)
         box = {b['id']: b for b in a['boxes']}
         names = lambda bid: {c['name'] for c in box[bid]['comps']}  # noqa: E731
+        external = lambda eco: {c['name'] for b in a['boxes'] if not b['repo'] and b['id'].endswith('#' + eco)
+                                for c in b['comps']}  # noqa: E731
         self.assertEqual(names('apps/venc#app'), {'venc', 'venc-log'})      # venc_test bo qua
         self.assertEqual(box['apps/venc#app']['comps'][0]['svc'], ['venc'])  # venc.service
         self.assertIn('venc_core', names('apps/venc#lib'))
@@ -222,9 +224,9 @@ class WorkspaceTest(unittest.TestCase):
         self.assertTrue({'pyapp', 'web'} <= names('tools/extra#app'))
         self.assertEqual(names('tools/extra#ext'), {'db'})                    # chi co image: service ben thu ba
         self.assertIn('GitLab CI', names('tools/extra#build'))
-        self.assertTrue({'libusb-1.0', 'libmpi'} <= names('ext#c'))
-        self.assertTrue({'liblog', 'libcutils', 'libutils'} <= names('ext#android'))   # libutils: tu cc_defaults
-        self.assertNotIn('libacme_headers', names('ext#android'))             # header lib trong workspace
+        self.assertTrue({'libusb-1.0', 'libmpi'} <= external('c'))
+        self.assertTrue({'liblog', 'libcutils', 'libutils'} <= external('android'))   # libutils: tu cc_defaults
+        self.assertNotIn('libacme_headers', external('android'))             # header lib trong workspace
         self.assertIn('libacme_headers', names('device/acme/board#lib'))
         self.assertEqual(names('device/acme/board#hal'), {'acme-sensord'})    # relative_install_path: "hw"
         self.assertNotIn('acme_defaults', names('device/acme/board#lib'))
@@ -259,7 +261,7 @@ class WorkspaceTest(unittest.TestCase):
                      'tools/extra/backend/pyproject.toml': '[project]\nname = "web-backend"\n'
                                                            'dependencies = ["foo.bar", "venc"]\n'
                                                            '[project.scripts]\nweb-backend = "x:y"\n',
-                     'device/acme/common/foo-bar/pyproject.toml': '[project]\nname = "Foo_Bar"\n'}
+                     'tools/extra/foo-bar/pyproject.toml': '[project]\nname = "Foo_Bar"\n'}
             for rel, text in files.items():
                 os.makedirs(os.path.dirname(os.path.join(tmp, rel)), exist_ok=True)
                 with open(os.path.join(tmp, rel), 'w') as f:
@@ -268,9 +270,9 @@ class WorkspaceTest(unittest.TestCase):
             comps = {(b['id'], c['name']): c for b in a['boxes'] for c in box_detail(a, b['id'])['comps']}
             self.assertIn(('tools/extra#app', 'web-backend'), comps)            # khong bi day xuong HAL
             uses = comps[('tools/extra#app', 'web-backend')]['uses']
-            self.assertIn(['Foo_Bar', 'device/acme/common#lib'], uses)       # foo.bar = Foo_Bar (PEP 503)
+            self.assertIn(['Foo_Bar', 'tools/extra#lib'], uses)       # foo.bar = Foo_Bar (PEP 503), same scope
             self.assertNotIn(['venc', 'apps/venc#app'], uses)                   # goi Python "venc" != binary C venc
-            self.assertIn(['venc', 'ext#py'], uses)
+            self.assertTrue(any(name == 'venc' and bid.startswith('ext#') and bid.endswith('#py') for name, bid in uses))
 
     def test_arch_cache(self):
         """Repo chua doi HEAD / index: lan sau dung lai ket qua tren dia; Rescan hoac doi commit: quet lai."""
