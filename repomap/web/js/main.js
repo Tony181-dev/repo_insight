@@ -419,7 +419,10 @@ function legend(repos) {
 
 const status = () => {
   const d = store.data;
-  if (d) $('#stat').textContent = t('status', { n: d.repos.length, mode: d.mode, s: d.took });
+  if (d) {
+    $('#stat').textContent = t('status', { n: d.repos.length, mode: d.mode, s: d.took });
+    $('#stat').title = `repomap ${d.version} · build ${d.build || '?'}\n${d.artifact || ''}`;
+  }
 };
 
 $('#lang').addEventListener('click', e => {

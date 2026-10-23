@@ -1,11 +1,11 @@
 @echo off
 rem Tao goi phat hanh de dua cho nguoi dung, KHONG kem repo ma nguon:
-rem   dist\repomap-<version>.tar.gz  va  dist\repomap-<version>.zip
+rem   dist\repomap-<version>.zip (chi mot goi)
 rem Trong goi: repomap.pyz, install.sh, README.txt, HUONG_DAN.html.
 rem   release.bat          chay unit test roi tao goi
 rem   release.bat notest   bo qua unit test
-setlocal
-cd /d "%~dp0"
+setlocal EnableExtensions DisableDelayedExpansion
+pushd "%~dp0" || exit /b 1
 set "RC=0"
 
 set "PY="
@@ -29,12 +29,12 @@ if errorlevel 1 (
 )
 
 echo.
-echo Gui file .tar.gz cho nguoi dung. Ho cai tren may build bang:
-echo   tar xzf repomap-*.tar.gz
-echo   cd repomap-*
-echo   sh install.sh
+echo Gui duy nhat file dist\repomap-*.zip vua tao.
+echo Giai nen vao thu muc moi, bam repomap-pc.cmd de thay PC server cu.
+echo Sau do Push to server roi Connect de cap nhat may build.
 
 :end
 echo.
-pause
+if not defined REPOMAP_NO_PAUSE pause
+popd
 endlocal & exit /b %RC%

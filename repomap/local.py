@@ -9,9 +9,9 @@ Mo giao dien web tai http://127.0.0.1:6960/ (web/local.html) gom 2 tab:
   Saved servers  toi da 5 preset
 ssh/scp chay trong cua so console rieng de nhap password. Server nay tu thoat khi khong con trang nao mo (IDLE giay).
 
-Moi luc chi 1 ket noi: Connect khi dang ket noi thi bao loi (Disconnect truoc); tunnel cu (cua so ssh khac) dang tra
-loi o port do thi dung lai, khong mo them. Tren server, repomap --connect thay repomap cua chinh user dang chay o port
-do thi dung chung (khong chay them ban thu 2), cua user khac / chuong trinh khac thi bao loi.
+Moi luc chi 1 ket noi: Connect khi dang ket noi thi bao loi (Disconnect truoc). Tunnel/repomap cu cua chinh user
+duoc thay sau khi xac minh process; khong dung chung instance cu. Chi mo UI khi session va build khop ban PC.
+Disconnect dung instance remote cua minh, doi SSH/console thoat va kiem tra port da duoc giai phong.
 
   GET  /api/local/state        -> cau hinh, preset, trang thai tunnel / deploy
   POST /api/local/config       {host, user, port, srv, dir, ws} -> luu cau hinh dang dung
@@ -27,6 +27,7 @@ import json
 import mimetypes
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import sys
@@ -40,6 +41,7 @@ from urllib.parse import urlparse
 from urllib.request import urlopen
 
 from . import __version__
+from .runtime import BUILD_ID, INSTANCE, identity, request_stop, stop_listener, wait_free
 from .server import Server, load_asset
 from .settings import (DEFAULT_PORT, Settings, app_archive, check_port, default_path, parse_ssh_command, port_busy,
                        render)
@@ -171,22 +173,23 @@ def ssh_args(cfg):
     return ['-p', str(cfg['port']), '-o', 'ConnectTimeout=15', '%s@%s' % (cfg['user'], cfg['host'])]
 
 
-def remote_command(cfg, d):
+def remote_command(cfg, d, session=None):
     """Lenh chay tren server qua ssh: repomap.pyz da Push -> scan ngay Workspace root (= menu "1. Run scan"), dung
     dung port tunnel. Viet duoc cho ca sh/bash va csh/tcsh (shell mac dinh cua user)."""
     pyz = d['rel'] + '/repomap.pyz'
-    return 'test -f %s || exit %d; exec python3 %s %s --connect --port %d' % (
+    cmd = 'test -f %s || exit %d; exec python3 %s %s --connect --replace --port %d' % (
         pyz, EXIT_NO_PYZ, pyz, remote_ws(cfg.get('ws'))['arg'], cfg['srv'])
+    return cmd + (' --session ' + session if session else '')
 
 
-def tunnel_argv(cfg, d=None):
+def tunnel_argv(cfg, d=None, session=None):
     """ssh -t -L port:127.0.0.1:port ... '<remote_command>' (-t: tat cua so ssh = repomap tren server nhan SIGHUP
     va dung theo). d=None: chi mo tunnel (-N), repomap da chay san tren server."""
     fwd = ['-L', '%d:127.0.0.1:%d' % (cfg['srv'], cfg['srv']), '-o', 'ExitOnForwardFailure=yes',
            '-o', 'ServerAliveInterval=30']
     if d is None:
         return ['ssh', '-N'] + fwd + ssh_args(cfg)
-    return ['ssh', '-t'] + fwd + ssh_args(cfg) + [remote_command(cfg, d)]
+    return ['ssh', '-t'] + fwd + ssh_args(cfg) + [remote_command(cfg, d, session)]
 
 
 def deploy_argv(cfg, src, path=None):
@@ -205,16 +208,37 @@ def quote(argv):
 
 # ---------------------------------------------------------------- cua so console (ssh / scp)
 
-def open_console(title, argv, done_text, folder):
+def open_console(title, argv, done_text, folder, visible=True):
     """Chay argv trong cua so cmd moi (Windows); cua so dung lai khi xong de doc loi. Ma thoat ghi vao rc.txt ngay khi
     lenh xong (truoc khi cho bam phim) de trang thai tren giao dien cap nhat luon. Tra ve Popen."""
     script = os.path.join(folder, 'run.cmd')
+    # Pass SSH/SCP arguments as JSON, never through cmd's quoting/metacharacter
+    # parser. In particular this preserves remote commands and paths with spaces.
+    with open(os.path.join(folder, 'argv.json'), 'w', encoding='utf-8') as f:
+        json.dump(argv, f)
+    with open(os.path.join(folder, 'runner.py'), 'w', encoding='utf-8') as f:
+        f.write('import json, os, subprocess, sys\n'
+                'base = os.path.dirname(__file__)\n'
+                'try:\n'
+                '    with open(os.path.join(base, "argv.json"), encoding="utf-8") as f: argv = json.load(f)\n'
+                '    rc = subprocess.call(argv)\n'
+                'except Exception as e:\n'
+                '    print(e, file=sys.stderr)\n'
+                '    rc = 1\n'
+                'with open(os.path.join(base, "rc.txt"), "w") as f: f.write(str(rc))\n'
+                'sys.exit(rc)\n')
+    python = sys.executable
+    if os.path.basename(python).lower() == 'pythonw.exe':
+        python = os.path.join(os.path.dirname(python), 'python.exe')
     with open(script, 'w', encoding='utf-8', newline='') as f:
-        f.write('@echo off\r\nchcp 65001 >nul\r\ntitle %s\r\necho %s\r\necho.\r\n%s\r\nset RC=%%errorlevel%%\r\n'
+        f.write('@echo off\r\nsetlocal DisableDelayedExpansion\r\nchcp 65001 >nul\r\ntitle %s\r\necho %s\r\necho.\r\n"%s" "%%~dp0runner.py"\r\nset RC=%%errorlevel%%\r\n'
                 '>"%%~dp0rc.txt" echo %%RC%%\r\n'
-                'echo.\r\nif "%%RC%%"=="0" (echo %s) else (echo Failed, exit code %%RC%%.)\r\npause\r\nexit /b %%RC%%\r\n'
-                % (title, title, quote(argv), done_text))
-    return subprocess.Popen(['cmd', '/c', script], creationflags=subprocess.CREATE_NEW_CONSOLE)
+                'echo.\r\nif "%%RC%%"=="0" (echo %s) else (echo Failed, exit code %%RC%%. & pause)\r\nexit /b %%RC%%\r\n'
+                % (title, title, python.replace('%', '%%'), done_text))
+    proc = subprocess.Popen('cmd.exe /d /s /c ""%s""' % script,
+                            creationflags=subprocess.CREATE_NEW_CONSOLE if visible else subprocess.CREATE_NO_WINDOW)
+    proc._repomap_folder = folder
+    return proc
 
 
 def exit_code(folder):
@@ -228,7 +252,17 @@ def exit_code(folder):
 
 def kill_tree(proc):
     if proc and proc.poll() is None:
-        subprocess.run(['taskkill', '/F', '/T', '/PID', str(proc.pid)], capture_output=True)
+        if WINDOWS:
+            r = subprocess.run(['taskkill', '/F', '/T', '/PID', str(proc.pid)], capture_output=True,
+                               creationflags=subprocess.CREATE_NO_WINDOW, timeout=15)
+            if r.returncode and proc.poll() is None:
+                raise ValueError('Could not stop the SSH/console process %d.' % proc.pid)
+        else:
+            proc.terminate()
+        proc.wait(timeout=10)
+        folder = getattr(proc, '_repomap_folder', None)
+        if folder:
+            shutil.rmtree(folder, ignore_errors=True)
 
 
 def repomap_info(port, timeout=4):
@@ -258,13 +292,14 @@ class Jobs:
     """Trang thai tunnel va deploy cho UI (poll /api/local/state).
 
     tunnel.state: idle | connecting (cua so ssh mo, cho password) | starting (tunnel len, repomap tren server dang
-      nap workspace) | up | external (tunnel cua cua so khac dang tra loi, dung chung) | closed | cancelled |
+      nap workspace) | up | stopping | stale (server khac build) | closed | cancelled |
       failed (code) | nopyz (chua Push) | taken (port tren server bi chuong trinh / user khac chiem) | manual"""
 
     ACTIVE = ('connecting', 'starting', 'up')
 
     def __init__(self):
         self.lock = threading.Lock()
+        self.operation = threading.RLock()
         self.tunnel = {'state': 'idle'}
         self.deploy = {'state': 'idle'}
         self.tunnel_proc = self.deploy_proc = None
@@ -285,10 +320,15 @@ class Jobs:
 
     # -------- tunnel
     def connect(self, cfg, open_browser=True):
+        with self.operation:
+            return self._connect(cfg, open_browser)
+
+    def _connect(self, cfg, open_browser):
         d = remote_dir(cfg.get('dir'))
         port = cfg['srv']
         url = 'http://127.0.0.1:%d/' % port
-        argv = tunnel_argv(cfg, d)
+        session = secrets.token_urlsafe(18)
+        argv = tunnel_argv(cfg, d, session)
         with self.lock:
             if self.tunnel_proc and self.tunnel_proc.poll() is None:
                 if self.tunnel.get('state') in self.ACTIVE:
@@ -297,14 +337,10 @@ class Jobs:
                 kill_tree(self.tunnel_proc)               # cua so cu chi con dung cho bam phim: dong luon
             self.tunnel_proc = None
         if port_busy(port):
-            if repomap_answers(port):                     # tunnel cua cua so khac van song: dung lai, khong mo them
-                info = repomap_info(port) or {}
-                self.set('tunnel', state='external', url=url, host=cfg['host'], root=info.get('root', ''))
-                if open_browser:
-                    webbrowser.open(url)
-                return
-            raise ValueError('Port %d on this PC is already in use (an old tunnel window, or another program). '
-                             'Close it, or change "Server & local port".' % port)
+            try:
+                stop_listener(port, ('tunnel', 'scanner'), repomap_info(port) or {})
+            except ValueError as e:
+                raise ValueError('Port %d on this PC is already in use. %s' % (port, e))
         cmd = quote(argv)
         if not WINDOWS:
             self.set('tunnel', state='manual', cmd=cmd, url=url, host=cfg['host'])
@@ -314,19 +350,52 @@ class Jobs:
         with self.lock:
             self.tunnel_proc = proc
             self.tunnel = {'state': 'connecting', 'cmd': cmd, 'url': url, 'host': cfg['host'], 'dir': d['show'],
-                           'ws': remote_ws(cfg.get('ws'))['show'], 'since': time.time()}
+                           'ws': remote_ws(cfg.get('ws'))['show'], 'port': port, 'session': session, 'since': time.time()}
         threading.Thread(target=self._watch_tunnel, args=(proc, port, url, folder, open_browser), daemon=True).start()
 
     def disconnect(self):
-        """Cancel (dang noi) / Disconnect (da noi): dong cua so ssh -> repomap tren server dung theo (SIGHUP)."""
+        with self.operation:
+            try:
+                return self._disconnect()
+            except Exception as e:
+                with self.lock:
+                    self.tunnel = dict(self.tunnel, state='failed', error=str(e))
+                raise
+
+    def _disconnect(self):
+        """Stop our remote instance first, then SSH/console, and verify the local port is free."""
         with self.lock:
             proc, state = self.tunnel_proc, self.tunnel.get('state')
             self.tunnel_proc = None
+            t = dict(self.tunnel)
+            if state in self.ACTIVE:
+                self.tunnel['state'] = 'stopping'
+        port = t.get('port')
+        if port and t.get('instance'):
+            request_stop(port, t)
+            # Keep SSH alive until the remote listener has closed. A forward's
+            # local socket stays open, so probe its remote HTTP response here.
+            end = time.monotonic() + 15
+            while time.monotonic() < end and repomap_answers(port, timeout=0.5):
+                time.sleep(0.1)
         if proc:
             kill_tree(proc)
+        if port and not wait_free(port, 2):
+            stop_listener(port, ('tunnel',))
+        if port and not wait_free(port, 2):
+            raise ValueError('Disconnect could not release local port %d.' % port)
         if state in self.ACTIVE or state == 'external':
             self.set('tunnel', **dict(self.tunnel, state='cancelled' if state == 'connecting' else 'closed'))
         return {'ok': True, 'was': state}
+
+    def close(self):
+        with self.operation:
+            try:
+                self._disconnect()
+            finally:
+                if self.deploy_proc:
+                    kill_tree(self.deploy_proc)
+                    self.deploy_proc = None
 
     def _watch_tunnel(self, proc, port, url, folder, open_browser):
         opened, end = False, time.time() + WAIT_TUNNEL
@@ -334,8 +403,29 @@ class Jobs:
             while proc.poll() is None and exit_code(folder) is None:
                 if self.tunnel_proc is not proc:
                     return
+                if not opened and time.time() >= end:
+                    self._update(proc, state='failed', error='Connection timed out.')
+                    kill_tree(proc)
+                    return
                 if port_busy(port):
-                    if repomap_answers(port):
+                    info = repomap_info(port, timeout=1)
+                    if info:
+                        if self.tunnel_proc is not proc:
+                            return
+                        expected = self.tunnel.get('session')
+                        if expected and info.get('session') != expected:
+                            if opened:
+                                self._update(proc, state='failed', error='The remote instance changed. Connect again.')
+                                kill_tree(proc)
+                                return
+                            self._update(proc, state='starting')
+                            time.sleep(0.2)
+                            continue
+                        if info.get('build') != BUILD_ID:
+                            self._update(proc, state='stale', error='The server runs another build. Push to server, then Connect again.')
+                            kill_tree(proc)
+                            return
+                        self._update(proc, **info)
                         if not opened and open_browser:
                             webbrowser.open(url)
                         opened = True
@@ -348,7 +438,7 @@ class Jobs:
             code = exit_code(folder)
             if code is None:
                 code = proc.returncode
-            state = {EXIT_NO_PYZ: 'nopyz', EXIT_PORT_TAKEN: 'taken', EXIT_NO_WS: 'nows', EXIT_OTHER_WS: 'otherws',
+            state = {2: 'stale', EXIT_NO_PYZ: 'nopyz', EXIT_PORT_TAKEN: 'taken', EXIT_NO_WS: 'nows', EXIT_OTHER_WS: 'otherws',
                      EXIT_NO_PYTHON: 'nopython'}.get(code)
             self._update(proc, state=state or ('closed' if opened or code == 0 else 'failed'), code=code)
         finally:
@@ -438,7 +528,7 @@ def make_handler(jobs, srv_port, open_browser):
             if path == '/api/local/state':
                 return self._send(state(jobs))
             if path == '/api/local/ping':
-                return self._send({'app': 'repomap-local'})
+                return self._send({'app': 'repomap-local', 'version': __version__, **identity()})
             name = 'local.html' if path in ('', '/') else path
             data = load_asset(name)
             if data is None:
@@ -454,6 +544,17 @@ def make_handler(jobs, srv_port, open_browser):
                 return self._send({'error': 'forbidden'}, code=403)
             try:
                 body = json.loads(raw or b'{}')
+                if urlparse(self.path).path == '/api/local/shutdown':
+                    if body.get('instance') != INSTANCE:
+                        return self._send({'error': 'instance changed'}, code=409)
+                    self._send({'ok': True})
+                    def stop():
+                        try:
+                            jobs.close()
+                        finally:
+                            self.server.shutdown()
+                    threading.Thread(target=stop, daemon=True).start()
+                    return
                 self._send(post(jobs, urlparse(self.path).path[len('/api/local/'):], body, open_browser))
             except ValueError as e:
                 self._send({'error': str(e)}, code=400)
@@ -467,7 +568,7 @@ def state(jobs):
     st = load_state()
     tunnel, deploy = jobs.snapshot()
     archive = app_archive()
-    return {'version': __version__, 'config': st['config'], 'presets': st['presets'], 'max': MAX_PRESETS,
+    return {'version': __version__, **identity(), 'config': st['config'], 'presets': st['presets'], 'max': MAX_PRESETS,
             'defaultPort': DEFAULT_PORT, 'remoteDir': REMOTE_DIR, 'windows': WINDOWS,
             'pyz': os.path.basename(archive) if archive else None, 'tunnel': tunnel, 'deploy': deploy}
 
@@ -513,22 +614,32 @@ def post(jobs, ep, body, open_browser=True):
     raise ValueError('unknown api: ' + ep)
 
 
-def already_running(port):
+def local_info(port):
     try:
         with urlopen('http://127.0.0.1:%d/api/local/ping' % port, timeout=2) as r:
-            return json.load(r).get('app') == 'repomap-local'
+            info = json.load(r)
+            return info if info.get('app') == 'repomap-local' else None
     except Exception:  # noqa: BLE001
-        return False
+        return None
 
 
-def run_local(port=None, open_browser=True):
+def already_running(port):
+    return bool(local_info(port))
+
+
+def run_local(port=None, open_browser=True, replace=False):
     log = lambda *x: print(*x, file=sys.stderr)  # noqa: E731
     first = port or UI_PORT
-    if already_running(first):                                # da mo roi -> chi mo lai trang
+    old = local_info(first)
+    if old and not replace and old.get('build') == BUILD_ID and old.get('artifact') == identity()['artifact']:
         log('repomap PC is already running: http://127.0.0.1:%d/' % first)
         if open_browser:
             webbrowser.open('http://127.0.0.1:%d/' % first)
         return
+    if port_busy(first) and (old or replace):
+        stop_listener(first, ('local',), old)
+    if replace and port_busy(first):
+        raise ValueError('Requested PC port %d is still occupied.' % first)
     for p in range(first, first + 20):
         if port_busy(p):
             log('  port %d is already in use, trying %d' % (p, p + 1))
@@ -559,4 +670,7 @@ def run_local(port=None, open_browser=True):
     except KeyboardInterrupt:
         pass
     finally:
-        srv.server_close()
+        try:
+            jobs.close()
+        finally:
+            srv.server_close()

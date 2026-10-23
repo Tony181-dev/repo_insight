@@ -176,12 +176,13 @@ function renderDeploy() {
 
 function renderMain(t) {
   const s = t.state;
-  const [label, act, cls] = s === 'connecting' || s === 'starting' ? ['Cancel', 'cancel', 'wait']
+  const [label, act, cls] = s === 'stopping' ? ['Stopping…', 'disconnect', 'wait']
+    : s === 'connecting' || s === 'starting' ? ['Cancel', 'cancel', 'wait']
     : s === 'up' || s === 'external' ? ['Disconnect', 'disconnect', 'stop'] : ['Connect', 'connect', ''];
   MAIN.textContent = label;
   MAIN.dataset.do = act;
   MAIN.className = 'big ' + (cls || 'pri');
-  MAIN.disabled = busy;
+  MAIN.disabled = busy || s === 'stopping';
 }
 
 function renderJobs() {
@@ -189,6 +190,8 @@ function renderJobs() {
   const url = t.url ? open(t.url) : '', dir = esc(t.dir || remoteDir(DIR.value).show || '~/.bin');
   renderMain(t);
   if (t.state === 'connecting') say(m, 'info', spin + 'Connecting… type your password in the SSH window if it asks.');
+  else if (t.state === 'stopping') say(m, 'info', spin + 'Stopping the remote server and closing SSH…');
+  else if (t.state === 'stale') say(m, 'bad', 'The server is running a different build. Press <b>Push to server</b>, then Connect again.');
   else if (t.state === 'starting') say(m, 'info', spin + 'Logged in. repomap is starting on the server (reading '
     + `<code>${esc(t.ws || '~')}</code>), the page opens by itself. ${url}`);
   else if (t.state === 'up') say(m, 'ok', `Connected. Opened ${url}. Keep the SSH window open; `
@@ -206,6 +209,7 @@ function renderJobs() {
   else if (t.state === 'taken') say(m, 'bad', `Port ${esc(port)} on the server is used by another program or user. `
     + 'Change “Server &amp; local port” in the Configuration, Push again, then Connect.');
   else if (t.state === 'nopython') say(m, 'bad', '<code>python3</code> was not found on the server.');
+  else if (t.state === 'failed' && t.error) say(m, 'bad', esc(t.error));
   else if (t.state === 'failed') say(m, 'bad', `SSH stopped (exit code ${esc(t.code)}`
     + `${t.code === 255 ? ': could not log in or reach the server' : ''}). See the SSH window for the reason.`);
   else if (t.state === 'manual') say(m, 'info', 'Run this command in a terminal and keep it open, then open ' + url);
@@ -229,7 +233,8 @@ async function refresh() {
   if (d.error) { say($('#conn-msg'), 'bad', esc(d.error)); return; }
   const first = !st;
   st = d;
-  $('#ver').textContent = 'v' + d.version;
+  $('#ver').textContent = 'v' + d.version + ' · build ' + (d.build || '?');
+  $('#ver').title = d.artifact || '';
   if (first) {
     fill(d.config);
     if (!ready()) say($('#cfg-msg'), 'info', 'Fill in the fields, or use Quick setup to paste your SSH command.');
@@ -284,7 +289,7 @@ async function check() {
   btn.disabled = false;
   if (d.error) return say(m, 'bad', esc(d.error));
   if (d.ok) {
-    const parts = [d.version && `repomap v${esc(d.version)}`, `answers in ${d.ms} ms`,
+    const parts = [d.version && `repomap v${esc(d.version)}`, d.build && `build ${esc(d.build)}`, `answers in ${d.ms} ms`,
       d.root && `workspace <code>${esc(d.root)}</code>${d.repos !== undefined ? ` (${d.repos} repos)` : ''}`,
       d.user && `user ${esc(d.user)}`, d.running ? `${d.running} script(s) running` : ''].filter(Boolean);
     return say(m, 'ok', '✓ Connection OK: ' + parts.join(' · ') + ` · ${open(`http://127.0.0.1:${port}/`)}`);

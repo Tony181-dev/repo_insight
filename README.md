@@ -56,9 +56,12 @@ Trên PC Windows có Python 3.8+, nhấp đúp `repomap-pc.cmd` (trong gói phá
     server (như chọn `1. Run scan`) rồi tự mở trang repomap. Chỉ cần thao tác trên trang PC. Nút đổi theo trạng thái: **Cancel** khi đang nối, **Disconnect** khi đã nối (đóng cửa
     sổ ssh, repomap trên server dừng theo; còn script đang chạy thì hỏi lại). **Check connection** hỏi repomap qua
     tunnel: phiên bản, workspace, số repo, script đang chạy, độ trễ.
-  - Không chạy trùng: đang nối thì Connect lần nữa bị từ chối; tunnel cũ (cửa sổ khác) còn trả lời thì dùng lại; trên
-    server, repomap của chính bạn đã chạy ở port đó với cùng workspace thì dùng chung; khác workspace, hoặc của user /
-    chương trình khác, thì báo để dừng bản kia hoặc đổi port.
+  - Launcher `repomap-pc.cmd` thay PC server cũ của chính bạn trên port 6960. Connect thay tunnel/repomap cũ đã xác
+    minh là của bạn, chạy một phiên server mới và chỉ mở giao diện khi mã phiên cùng mã build khớp với bản PC.
+    Đang nối thì Connect lần nữa bị từ chối; tiến trình khác hoặc của user khác không bị tắt.
+  - Khi cập nhật, **Push to server trước Connect**. Mã **build** trên trang PC phải khớp `BUILD.json` trong ZIP;
+    server khác build sẽ báo lỗi thay vì mở nhầm trang cũ. Disconnect yêu cầu server dừng, chờ SSH/console thoát
+    và xác nhận local port đã được giải phóng. Tắt PC server cũng dọn các SSH/SCP do nó mở.
     Chưa Push, thiếu `python3`, port bận... đều có thông báo riêng.
 - **Saved servers**: tối đa 5 preset, chọn một preset để điền vào Configuration.
 
@@ -218,7 +221,7 @@ legacy/          modmap.py - bản 1 file cũ, giữ để tham khảo, không c
 ```
 
 CI (GitHub Actions) chạy test trên Linux với Python 3.8 và 3.12 mỗi lần push, tạo gói phát hành,
-cài thử bằng `install.sh`, và đính kèm `repomap.pyz` cùng gói `.tar.gz`/`.zip` ở mục Artifacts.
+cài thử bằng `install.sh`, và đính kèm duy nhất gói `.zip` ở mục Artifacts.
 
 Thêm hệ build mới: thêm nhóm vào `rules.CATS`, file đánh dấu vào `classify.MARKS`,
 parser vào `parsers.parse_file`, màu vào `web/js/util.js` (`KIND_COLOR`).
@@ -226,7 +229,7 @@ parser vào `parsers.parse_file`, màu vào `web/js/util.js` (`KIND_COLOR`).
 ## Phát hành cho người dùng (không đưa mã nguồn)
 
 ```sh
-release.bat     # Windows: chạy test rồi tạo dist\repomap-<ver>.tar.gz và .zip (release.bat notest để bỏ test)
+release.bat     # Windows: chạy test rồi tạo duy nhất dist\repomap-<ver>.zip (release.bat notest để bỏ test)
 make release    # Linux: cùng gói như trên (cùng dùng tools/make_release.py)
 ```
 
@@ -235,7 +238,8 @@ Gói chỉ chứa `repomap.pyz`, `install.sh`, `README.txt`, `HUONG_DAN.html` (t
 Người dùng cài trên máy Linux, không cần root, pip hay mạng:
 
 ```sh
-tar xzf repomap-1.0.0.tar.gz && cd repomap-1.0.0 && sh install.sh   # -> ~/.local/bin/repomap
+python3 -m zipfile -e repomap-1.0.0.zip .
+cd repomap-1.0.0 && sh install.sh   # -> ~/.local/bin/repomap
 ```
 
 Lưu ý: `repomap.pyz` là file zip chứa mã Python dạng text; giải nén ra là đọc được.

@@ -10,10 +10,10 @@ Hướng dẫn đầy đủ: mở file HUONG_DAN.html bằng trình duyệt.
 CÀI ĐẶT TRÊN MÁY BUILD LINUX
 
   1. Copy gói lên máy build (chạy trên PC của bạn):
-       scp repomap-{version}.tar.gz user@your_build_server:~
+       scp repomap-{version}.zip user@your_build_server:~
 
   2. Trên máy build, giải nén và cài:
-       tar xzf repomap-{version}.tar.gz
+       python3 -m zipfile -e repomap-{version}.zip .
        cd repomap-{version}
        sh install.sh
 
@@ -37,6 +37,8 @@ CÁCH NHANH NHẤT: DÙNG repomap TRÊN PC WINDOWS (cần Python 3.8+ trên PC)
 
   1. Giải nén gói trên PC, nhấp đúp repomap-pc.cmd. Trình duyệt mở trang
      http://127.0.0.1:6960 với 2 tab: Connect / Saved servers.
+     Launcher thay PC server cũ của chính bạn tại port này; không dùng lại bản cũ.
+     Mã build trên trang phải khớp BUILD.json trong gói vừa giải nén.
   2. Tab Connect -> Configuration -> Quick setup: dán lệnh ssh của server.
   3. Server folder: để trống = ~/.bin; gõ tên thư mục (vd tools) = ~/tools,
      tự tạo nếu chưa có; gõ đường dẫn (/opt/x) = thư mục phải có sẵn.
@@ -49,6 +51,9 @@ CÁCH NHANH NHẤT: DÙNG repomap TRÊN PC WINDOWS (cần Python 3.8+ trên PC)
      Trang repomap tự mở khi server sẵn sàng. Giữ cửa sổ ssh mở trong lúc
      dùng; Disconnect đóng nó (repomap trên server dừng theo), Cancel khi
      đang nối, Check connection để kiểm tra.
+     Khi cập nhật: luôn Push to server trước Connect. Nếu build trên server
+     không khớp, tool báo lỗi thay vì mở nhầm giao diện cũ. Disconnect đợi
+     server dừng rồi đóng SSH/console và kiểm tra port đã được giải phóng.
 
 
 XEM GIAO DIỆN TỪ PC BẰNG LỆNH

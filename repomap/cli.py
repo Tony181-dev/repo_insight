@@ -1,9 +1,9 @@
 """Dong lenh:
   repomap [WORKSPACE]                 menu: 1. Run scan / 2. Configuration / 3. Quick setup / 0. Exit
   repomap --local                     tren PC: Connect (co Deploy) / Saved servers (xem local.py)
-  repomap ROOT --connect --port P     do nut Connect tren PC chay qua ssh: scan ngay ROOT (= "1. Run scan"; o
+  repomap ROOT --connect --replace --port P   do nut Connect tren PC chay qua ssh: scan ngay ROOT (= "1. Run scan"; o
                                       Workspace root tren trang PC, trong = ~), dung dung port P; repomap cua minh
-                                      dang chay o P cung workspace thi dung chung
+                                      dang chay o P thi thay bang instance moi (cung user, da xac minh)
   repomap WORKSPACE --run             bo qua menu, chay ngay (dung trong script)
   repomap WORKSPACE --json REPO       in JSON 1 repo roi thoat
 """
@@ -26,6 +26,7 @@ from .menu import ask, check_workspace, run_menu
 from .server import start_server
 from .settings import load_settings, port_busy, save_settings, write_template
 from .workspace import Workspace
+from .runtime import BUILD_ID, stop_listener
 
 
 def parse_args(argv=None):
@@ -43,6 +44,9 @@ def parse_args(argv=None):
     ap.add_argument('--workers', type=int, help='threads used to classify repos')
     ap.add_argument('--local', action='store_true',
                     help='on your PC: open the Connect / Saved servers page (Deploy is in Connect; needs ssh and scp)')
+    ap.add_argument('--replace', action='store_true',
+                    help='replace a verified repomap instance already using the requested local/connect port')
+    ap.add_argument('--session', help=argparse.SUPPRESS)
     ap.add_argument('--connect', action='store_true',
                     help='used by the Connect button of the PC page (over ssh): scan ROOT (else the last workspace) '
                          'right away on exactly --port; if your own repomap already runs there on the same '
@@ -114,20 +118,38 @@ def stop_on_signals():
 
 def main(argv=None):
     a = parse_args(argv)
+    from . import runtime
+    runtime.SESSION = a.session or ''
     if a.init_config is not None:
         print('written: ' + write_template(a.init_config or None))
         return
 
     if a.local:
         from .local import run_local
-        run_local(a.port, not a.no_browser)
+        # pythonw has no stderr: keep startup/replacement errors visible in a log.
+        hidden = sys.stderr is None
+        if hidden:
+            from .settings import default_path
+            path = os.path.join(os.path.dirname(default_path()), 'local.log')
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            sys.stderr = sys.stdout = open(path, 'a', encoding='utf-8', buffering=1)
+        try:
+            run_local(a.port, not a.no_browser, replace=a.replace)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            if hidden and os.name == 'nt' and not a.no_browser:
+                import ctypes
+                ctypes.windll.user32.MessageBoxW(None, 'repomap could not start:\n%s\n\nLog: %s' % (e, path),
+                                                'repomap PC', 0x10)
+            raise
         return
 
     saved = load_settings(a.config)
     root = a.root
     if a.connect:
         root = connect_workspace(a, saved)
-        if attach_running(a.port or saved.port, root):
+        if attach_running(a.port or saved.port, root, replace=a.replace):
             return
     elif interactive(a):
         try:
@@ -177,7 +199,7 @@ def _same_dir(a, b):
     return bool(a and b) and os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b))
 
 
-def attach_running(port, root=None):
+def attach_running(port, root=None, replace=False):
     """Port da co repomap cua chinh user nay, cung workspace: khong chay ban thu 2, giu phien ssh (tunnel) cho toi khi
     repomap do dung hoac cua so bi dong. Khac workspace: bao loi, ma 6 (khong am tham cho xem nham workspace).
     Port bi chuong trinh / user khac chiem: bao loi, ma 4. PC hien thong bao theo ma thoat."""
@@ -185,6 +207,10 @@ def attach_running(port, root=None):
         return False
     log = lambda *x: print(*x, file=sys.stderr, flush=True)  # noqa: E731
     info = ping(port)
+    if replace:
+        stop_listener(port, ('scanner',), info)
+        log('Stopped the previous repomap on port %d; starting build %s.' % (port, BUILD_ID))
+        return False
     if info and info.get('user') == getpass.getuser() and root and not _same_dir(root, info.get('root')):
         log('Your repomap already runs on port %d with workspace %s (pid %s), not %s.'
             % (port, info.get('root'), info.get('pid'), root))

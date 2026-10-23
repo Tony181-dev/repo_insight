@@ -38,7 +38,7 @@ jobs:
         run: |
           python tools/make_release.py
           mkdir -p "$RUNNER_TEMP/rel"
-          tar xzf dist/repomap-*.tar.gz -C "$RUNNER_TEMP/rel"
+          python -m zipfile -e dist/repomap-*.zip "$RUNNER_TEMP/rel"
           cd "$RUNNER_TEMP"/rel/repomap-*
           PYTHON="$(command -v python)" sh install.sh --prefix "$RUNNER_TEMP/pfx"
           "$RUNNER_TEMP/pfx/bin/repomap" --version
@@ -48,7 +48,4 @@ jobs:
         if: matrix.python == '3.12'
         with:
           name: repomap-release
-          path: |
-            dist/repomap.pyz
-            dist/repomap-*.tar.gz
-            dist/repomap-*.zip
+          path: dist/repomap-*.zip

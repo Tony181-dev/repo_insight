@@ -1,7 +1,6 @@
 """Tao goi phat hanh de dua cho nguoi dung (khong kem repo ma nguon):
 
-  dist/repomap-<version>.tar.gz   (cho Linux: tar xzf ... && sh install.sh)
-  dist/repomap-<version>.zip      (cung noi dung, de mo tren Windows)
+  dist/repomap-<version>.zip      (Windows va Linux, duy nhat mot archive)
 
 Noi dung goi:
   repomap.pyz      tool (1 file, chay bang python3)
@@ -13,11 +12,11 @@ Noi dung goi:
   python tools/make_release.py [--test]
 """
 import argparse
-import io
+import glob
+import json
 import os
 import re
 import sys
-import tarfile
 import tempfile
 import time
 import zipfile
@@ -65,19 +64,9 @@ def release_files(ver):
         ('HUONG_DAN.html', user_guide(), 0o644),
         ('app.png', read(os.path.join(DOCS, 'app.png')), 0o644),
     ]
+    from repomap.runtime import BUILD_ID
+    files.append(('BUILD.json', json.dumps({'version': ver, 'build': BUILD_ID}, indent=2).encode() + b'\n', 0o644))
     return files
-
-
-def write_tar(path, top, files):
-    now = time.time()
-    with tarfile.open(path, 'w:gz') as tf:
-        d = tarfile.TarInfo(top)
-        d.type, d.mode, d.mtime = tarfile.DIRTYPE, 0o755, now
-        tf.addfile(d)
-        for name, data, mode in files:
-            ti = tarfile.TarInfo('%s/%s' % (top, name))
-            ti.size, ti.mode, ti.mtime = len(data), mode, now
-            tf.addfile(ti, io.BytesIO(data))
 
 
 def write_zip(path, top, files):
@@ -100,12 +89,21 @@ def main():
     top = 'repomap-' + ver
     files = release_files(ver)
     os.makedirs(DIST, exist_ok=True)
-    tgz, zp = os.path.join(DIST, top + '.tar.gz'), os.path.join(DIST, top + '.zip')
-    write_tar(tgz, top, files)
-    write_zip(zp, top, files)
+    zp = os.path.join(DIST, top + '.zip')
+    staging = zp + '.tmp'
+    try:
+        write_zip(staging, top, files)
+        os.replace(staging, zp)
+    finally:
+        if os.path.exists(staging):
+            os.unlink(staging)
+    # Remove only archives produced by this release tool, after success.
+    for pattern in ('repomap-*.tar.gz', 'repomap-*.tgz', 'repomap-*.zip'):
+        for old in glob.glob(os.path.join(DIST, pattern)):
+            if os.path.abspath(old) != os.path.abspath(zp):
+                os.unlink(old)
     print('noi dung goi: ' + ', '.join(n for n, _, _ in files))
-    for p in (tgz, zp):
-        print('da tao: %s  (%.0f KB)' % (p, os.path.getsize(p) / 1024))
+    print('da tao: %s  (%.0f KB)' % (zp, os.path.getsize(zp) / 1024))
 
 
 if __name__ == '__main__':

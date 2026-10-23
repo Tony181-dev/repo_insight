@@ -13,7 +13,7 @@ test:               ## chay unit test (chi can python stdlib)
 pyz:                ## dong goi 1 file chay duoc: dist/repomap.pyz  ->  python3 repomap.pyz ~/your_workspace_root
 	$(PYTHON) tools/build_pyz.py --test
 
-release:            ## goi phat hanh cho nguoi dung (khong kem repo): dist/repomap-<ver>.tar.gz va .zip
+release:            ## goi phat hanh duy nhat: dist/repomap-<ver>.zip
 	$(PYTHON) tools/make_release.py --test
 
 wheel:              ## dong goi wheel: dist/repomap-*.whl  (pip install dist/repomap-*.whl)

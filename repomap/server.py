@@ -24,6 +24,7 @@ import os
 import pkgutil
 import posixpath
 import sys
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -37,6 +38,7 @@ from .fileview import file_lines, file_view
 from .guard import write_denied
 from .insight import insight
 from .source import list_dir, search
+from .runtime import identity, INSTANCE
 
 
 def load_asset(path):
@@ -89,7 +91,7 @@ def make_handler(ws, builds):
             repo, force = q.get('repo', ''), q.get('force') == '1'
             if ep == 'tree':
                 return self._send({'root': ws.root, 'mode': ws.mode, 'took': round(ws.took, 2),
-                                   'version': __version__, 'repos': ws.repos, 'noEdit': write_denied(self, header=False)})
+                                   'version': __version__, **identity(), 'repos': ws.repos, 'noEdit': write_denied(self, header=False)})
             if ep == 'arch':
                 full = ws.cached(('arch',), lambda: build_arch(ws, force), force)
                 return self._send(ws.cached(('arch-slim',), lambda: slim_arch(full), force))
@@ -97,7 +99,7 @@ def make_handler(ws, builds):
                 return self._send(builds.summary())
             if ep == 'ping':
                 running = sum(s['state'] == 'running' for b in builds.summary().values() for s in b['scripts'].values())
-                return self._send({'app': 'repomap', 'version': __version__, 'root': ws.root, 'repos': len(ws.repos),
+                return self._send({'app': 'repomap', 'version': __version__, **identity(), 'root': ws.root, 'repos': len(ws.repos),
                                    'user': getpass.getuser(), 'pid': os.getpid(), 'running': running})
             if ep == 'archbox':
                 return self._send(box_detail(ws.cached(('arch',), lambda: build_arch(ws)), q.get('id', '')))
@@ -133,6 +135,15 @@ def make_handler(ws, builds):
                     return self._send({'error': 'expected JSON'}, code=415)
                 body = json.loads(raw or b'{}')
                 repo, ep = body.get('repo', ''), urlparse(self.path).path[len('/api/'):]
+                if ep == 'shutdown':
+                    if body.get('instance') != INSTANCE:
+                        return self._send({'error': 'instance changed'}, code=409)
+                    self._send({'ok': True})
+                    def stop():
+                        builds.stop_all()
+                        self.server.shutdown()
+                    threading.Thread(target=stop, daemon=True).start()
+                    return
                 if repo not in ws.by_path:
                     return self._send({'error': 'no such repo: ' + repo}, code=404)
                 if ep == 'script-create':

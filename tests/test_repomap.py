@@ -378,11 +378,11 @@ class ReleaseTest(unittest.TestCase):
         import make_release
         files = {n: (data, mode) for n, data, mode in make_release.release_files('9.9')}
         self.assertEqual(set(files), {'repomap.pyz', 'install.sh', 'repomap-pc.cmd', 'README.txt', 'HUONG_DAN.html',
-                                      'app.png'})
+                                      'app.png', 'BUILD.json'})
         self.assertIn(b'\r\n', files['repomap-pc.cmd'][0])                 # cmd tren Windows can CRLF
         self.assertNotIn(b'\r', files['install.sh'][0])                     # sh tren Linux can LF
         self.assertEqual(files['install.sh'][1], 0o755)
-        self.assertIn(b'repomap-9.9.tar.gz', files['README.txt'][0])
+        self.assertIn(b'repomap-9.9.zip', files['README.txt'][0])
         guide = files['HUONG_DAN.html'][0]
         for secret in (b'git clone', b'release.bat', b'build.bat', b'maintainer', b'repomap/rules.py'):
             self.assertNotIn(secret, guide)                                 # phan cho nguoi giu ma nguon da bi cat
@@ -842,11 +842,11 @@ class LocalTest(unittest.TestCase):
         run = local.tunnel_argv(cfg, local.remote_dir('tools'))        # Connect: tunnel + chay repomap.pyz luon
         self.assertEqual(run[:4], ['ssh', '-t', '-L', '6969:127.0.0.1:6969'])
         self.assertEqual(run[-2:], ['worker@h.vbee.lge.com', 'test -f tools/repomap.pyz || exit 3; '
-                                    'exec python3 tools/repomap.pyz ~ --connect --port 6969'])   # trong = scan ~
+                                    'exec python3 tools/repomap.pyz ~ --connect --replace --port 6969'])
         self.assertIn('"test -f tools/repomap.pyz || exit 3; exec', local.quote(run))
         ws = local.check_cfg(dict(self.CFG, ws='/home/worker/android13/'))
         self.assertTrue(local.tunnel_argv(ws, local.remote_dir(''))[-1].endswith(
-            'exec python3 .bin/repomap.pyz /home/worker/android13 --connect --port 6969'))
+            'exec python3 .bin/repomap.pyz /home/worker/android13 --connect --replace --port 6969'))
         self.assertEqual(local.remote_ws('src/ws'), {'arg': 'src/ws', 'show': '~/src/ws', 'home': False})
         argv = local.deploy_argv(cfg, '/tmp/x/.bin')
         self.assertEqual(argv[:4], ['scp', '-r', '-P', '56614'])
