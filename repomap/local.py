@@ -2,8 +2,9 @@
 
 Mo giao dien web tai http://127.0.0.1:6960/ (web/local.html) gom 2 tab:
   Connect        cau hinh ssh (host/user/port + port server = port PC, mac dinh 6969), Quick setup tu lenh ssh,
-                 Server folder (noi dat repomap.pyz + repomap.ini, mac dinh ~/.bin), Push to server (scp),
-                 Connect: 1 cua so ssh vua mo tunnel (-L) vua chay repomap.pyz tren server (= menu "1. Run scan"),
+                 Server folder (noi dat repomap.pyz + repomap.ini, mac dinh ~/.bin), Workspace root (thu muc scan,
+                 trong = ~ home cua user ssh), Push to server (scp),
+                 Connect: 1 cua so ssh vua mo tunnel (-L) vua chay repomap.pyz <Workspace root> (= "1. Run scan"),
                  tu mo http://127.0.0.1:<port>/ khi server tra loi; Cancel / Disconnect / Check connection
   Saved servers  toi da 5 preset
 ssh/scp chay trong cua so console rieng de nhap password. Server nay tu thoat khi khong con trang nao mo (IDLE giay).
@@ -13,14 +14,14 @@ loi o port do thi dung lai, khong mo them. Tren server, repomap --connect thay r
 do thi dung chung (khong chay them ban thu 2), cua user khac / chuong trinh khac thi bao loi.
 
   GET  /api/local/state        -> cau hinh, preset, trang thai tunnel / deploy
-  POST /api/local/config       {host, user, port, srv, dir}     -> luu cau hinh dang dung
+  POST /api/local/config       {host, user, port, srv, dir, ws} -> luu cau hinh dang dung
   POST /api/local/quick        {text}                           -> doc lenh ssh -> {host, user, port, srv}
-  POST /api/local/preset       {name, host, user, port, srv, dir} -> luu preset (trung ten = ghi de)
+  POST /api/local/preset       {name, host, user, port, srv, dir, ws} -> luu preset (trung ten = ghi de)
   POST /api/local/preset-del   {name}
-  POST /api/local/connect      {host, user, port, srv, dir}
+  POST /api/local/connect      {host, user, port, srv, dir, ws}
   POST /api/local/disconnect   {}                               -> dong cua so ssh (huy luc dang noi / ngat ket noi)
   POST /api/local/check        {srv}                            -> hoi repomap qua tunnel: con song khong, workspace
-  POST /api/local/deploy       {host, user, port, srv, dir}
+  POST /api/local/deploy       {host, user, port, srv, dir, ws}
 """
 import json
 import mimetypes
@@ -51,9 +52,9 @@ REMOTE_DIR = '.bin'       # ~/.bin tren server
 WINDOWS = os.name == 'nt'
 HOST_RE, USER_RE = re.compile(r'^[A-Za-z0-9.-]+$'), re.compile(r'^[\w.-]+$')
 DIR_RE = re.compile(r'^[\w.~/+-]+$', re.A)          # khong dau cach / ky tu shell: lenh ssh chay qua shell server
-CFG_KEYS = ('host', 'user', 'port', 'srv', 'dir')
+CFG_KEYS = ('host', 'user', 'port', 'srv', 'dir', 'ws')
 # ma thoat cua lenh tren server (xem remote_command / cli --connect)
-EXIT_NO_PYZ, EXIT_PORT_TAKEN, EXIT_NO_PYTHON = 3, 4, 127
+EXIT_NO_PYZ, EXIT_PORT_TAKEN, EXIT_NO_WS, EXIT_OTHER_WS, EXIT_NO_PYTHON = 3, 4, 5, 6, 127
 
 
 # ---------------------------------------------------------------- cau hinh / preset
@@ -86,8 +87,10 @@ def check_cfg(d):
     if not USER_RE.match(user):
         raise ValueError('SSH user is missing or invalid')
     remote_dir(d.get('dir'))
+    remote_ws(d.get('ws'))
     return {'host': host, 'user': user, 'port': _port(d, 'port', 22, 'SSH port'),
-            'srv': _port(d, 'srv', DEFAULT_PORT, 'Server & local port'), 'dir': str(d.get('dir') or '').strip()}
+            'srv': _port(d, 'srv', DEFAULT_PORT, 'Server & local port'), 'dir': str(d.get('dir') or '').strip(),
+            'ws': str(d.get('ws') or '').strip()}
 
 
 def _port(d, key, default, label):
@@ -124,14 +127,35 @@ def remote_dir(value):
     return {'rel': rel, 'path': True, 'show': v if v.startswith(('/', '~')) else '~/' + v}
 
 
+def remote_ws(value):
+    """O "Workspace root" -> thu muc repomap scan khi Connect (tham so cho repomap.pyz tren server):
+      ''                    ~ = thu muc home cua user ssh (vd /home/worker, noi thuong co ~/.bin)
+      /abs, ~/x, x/y        duong dan (tuong doi = tinh tu ~); khong co tren server -> Connect bao loi
+    -> {'arg': chuoi dua vao lenh ssh (shell server tu thay ~), 'show': de hien}."""
+    v = str(value or '').strip()
+    if len(v) > 1:
+        v = v.rstrip('/')
+    if not v or v == '~':
+        return {'arg': '~', 'show': '~ (home folder)', 'home': True}
+    if not DIR_RE.match(v) or v.startswith('-') or len(v) > 300:
+        raise ValueError('Workspace root: use a path made of letters, digits and . _ - / ~ (no spaces)')
+    if v.startswith('~') and not v.startswith('~/'):
+        raise ValueError('Workspace root: ~user paths are not supported, write the full path')
+    return {'arg': v, 'show': v if v.startswith(('/', '~')) else '~/' + v, 'home': False}
+
+
 def quick(text):
     user, host, port = parse_ssh_command(text)
     return {'host': host, 'user': user, 'port': port, 'srv': DEFAULT_PORT}
 
 
 def server_ini(cfg):
-    """repomap.ini dat canh repomap.pyz tren server: lenh tunnel in ra khop voi PC."""
-    return render(Settings(port=cfg['srv'], ssh_host=cfg['host'], ssh_user=cfg['user'], ssh_port=cfg['port']))
+    """repomap.ini dat canh repomap.pyz tren server: lenh tunnel in ra khop voi PC; workspace = Workspace root (de
+    chay tay  python3 .../repomap.pyz  tren server cung scan dung cho do)."""
+    w = remote_ws(cfg.get('ws'))
+    ws = '' if w['home'] else w['show']
+    return render(Settings(port=cfg['srv'], ssh_host=cfg['host'], ssh_user=cfg['user'], ssh_port=cfg['port'],
+                           workspace=ws))
 
 
 def build_pyz(out):
@@ -148,10 +172,11 @@ def ssh_args(cfg):
 
 
 def remote_command(cfg, d):
-    """Lenh chay tren server qua ssh: repomap.pyz da Push -> scan ngay (= menu "1. Run scan"), dung dung port tunnel.
-    Viet duoc cho ca sh/bash va csh/tcsh (shell mac dinh cua user)."""
+    """Lenh chay tren server qua ssh: repomap.pyz da Push -> scan ngay Workspace root (= menu "1. Run scan"), dung
+    dung port tunnel. Viet duoc cho ca sh/bash va csh/tcsh (shell mac dinh cua user)."""
     pyz = d['rel'] + '/repomap.pyz'
-    return 'test -f %s || exit %d; exec python3 %s --connect --port %d' % (pyz, EXIT_NO_PYZ, pyz, cfg['srv'])
+    return 'test -f %s || exit %d; exec python3 %s %s --connect --port %d' % (
+        pyz, EXIT_NO_PYZ, pyz, remote_ws(cfg.get('ws'))['arg'], cfg['srv'])
 
 
 def tunnel_argv(cfg, d=None):
@@ -273,7 +298,8 @@ class Jobs:
             self.tunnel_proc = None
         if port_busy(port):
             if repomap_answers(port):                     # tunnel cua cua so khac van song: dung lai, khong mo them
-                self.set('tunnel', state='external', url=url, host=cfg['host'])
+                info = repomap_info(port) or {}
+                self.set('tunnel', state='external', url=url, host=cfg['host'], root=info.get('root', ''))
                 if open_browser:
                     webbrowser.open(url)
                 return
@@ -288,7 +314,7 @@ class Jobs:
         with self.lock:
             self.tunnel_proc = proc
             self.tunnel = {'state': 'connecting', 'cmd': cmd, 'url': url, 'host': cfg['host'], 'dir': d['show'],
-                           'since': time.time()}
+                           'ws': remote_ws(cfg.get('ws'))['show'], 'since': time.time()}
         threading.Thread(target=self._watch_tunnel, args=(proc, port, url, folder, open_browser), daemon=True).start()
 
     def disconnect(self):
@@ -322,7 +348,8 @@ class Jobs:
             code = exit_code(folder)
             if code is None:
                 code = proc.returncode
-            state = {EXIT_NO_PYZ: 'nopyz', EXIT_PORT_TAKEN: 'taken', EXIT_NO_PYTHON: 'nopython'}.get(code)
+            state = {EXIT_NO_PYZ: 'nopyz', EXIT_PORT_TAKEN: 'taken', EXIT_NO_WS: 'nows', EXIT_OTHER_WS: 'otherws',
+                     EXIT_NO_PYTHON: 'nopython'}.get(code)
             self._update(proc, state=state or ('closed' if opened or code == 0 else 'failed'), code=code)
         finally:
             if proc.poll() is not None:
@@ -470,16 +497,19 @@ def post(jobs, ep, body, open_browser=True):
         st['presets'] = [p for p in st['presets'] if p['name'] != body.get('name')]
         save_state(st)
         return {'ok': True}
-    if ep == 'connect':
-        jobs.connect(check_cfg(body), open_browser)
+    if ep in ('connect', 'deploy'):                  # nho gia tri vua dung (Server folder, Workspace root...)
+        cfg = check_cfg(body)
+        st['config'] = {k: body.get(k, '') for k in CFG_KEYS}
+        save_state(st)
+        if ep == 'connect':
+            jobs.connect(cfg, open_browser)
+        else:
+            jobs.push(cfg)
         return {'ok': True}
     if ep == 'disconnect':
         return jobs.disconnect()
     if ep == 'check':
         return jobs.check(_port(body, 'srv', DEFAULT_PORT, 'Server & local port'))
-    if ep == 'deploy':
-        jobs.push(check_cfg(body))
-        return {'ok': True}
     raise ValueError('unknown api: ' + ep)
 
 

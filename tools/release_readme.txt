@@ -40,10 +40,12 @@ CÁCH NHANH NHẤT: DÙNG repomap TRÊN PC WINDOWS (cần Python 3.8+ trên PC)
   2. Tab Connect -> Configuration -> Quick setup: dán lệnh ssh của server.
   3. Server folder: để trống = ~/.bin; gõ tên thư mục (vd tools) = ~/tools,
      tự tạo nếu chưa có; gõ đường dẫn (/opt/x) = thư mục phải có sẵn.
+     Workspace root: thư mục cần scan (có .repo/); để trống = home trên
+     server (vd /home/worker). Giá trị được nhớ và lưu cùng preset.
   4. Bấm Push to server: chép repomap.pyz + repomap.ini vào thư mục đó
      (gõ password trong cửa sổ ssh nếu được hỏi).
   5. Bấm Connect: cửa sổ ssh vừa mở tunnel vừa chạy repomap.pyz trên server
-     (= 1. Run scan; lần đầu hỏi đường dẫn workspace ngay trong cửa sổ đó).
+     với Workspace root (= 1. Run scan).
      Trang repomap tự mở khi server sẵn sàng. Giữ cửa sổ ssh mở trong lúc
      dùng; Disconnect đóng nó (repomap trên server dừng theo), Cancel khi
      đang nối, Check connection để kiểm tra.

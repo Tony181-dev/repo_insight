@@ -47,14 +47,18 @@ Trên PC Windows có Python 3.8+, nhấp đúp `repomap-pc.cmd` (trong gói phá
   - **Server folder** (ngay trên Push / Connect): nơi đặt `repomap.pyz` + `repomap.ini` trên server. Để trống = `~/.bin`
     (gợi ý *default .bin folder*). Gõ **tên thư mục** (vd `tools`) = `~/tools`, cùng cấp với `~/.bin`: chưa có thì tạo,
     có rồi thì chép đè vào. Gõ **đường dẫn** (`/opt/x`, `~/a/b`, `a/b`) = thư mục phải có sẵn, không có thì Push báo lỗi.
-  - **Push to server** chép 2 file vào thư mục đó (1 lần gõ password).
-  - **Connect** mở 1 cửa sổ ssh vừa làm tunnel vừa chạy `repomap.pyz` đã Push trên server, scan ngay workspace lần
-    trước (như chọn `1. Run scan`; lần đầu hỏi đường dẫn workspace ngay trong cửa sổ ssh) rồi tự mở trang repomap. Chỉ
-    cần thao tác trên trang PC. Nút đổi theo trạng thái: **Cancel** khi đang nối, **Disconnect** khi đã nối (đóng cửa
+  - **Workspace root**: thư mục cần scan khi Connect (thư mục có `.repo/`). Để trống = thư mục home của user ssh trên
+    server (vd `/home/worker`, nơi thường có `~/.bin`). Đường dẫn tương đối tính từ home; không có trên server thì
+    Connect báo lỗi. Giá trị dùng lần cuối được nhớ, và lưu cùng preset (Saved servers).
+  - **Push to server** chép 2 file vào thư mục đó (1 lần gõ password); `repomap.ini` ghi sẵn Workspace root để chạy
+    tay trên server cũng scan đúng chỗ.
+  - **Connect** mở 1 cửa sổ ssh vừa làm tunnel vừa chạy `python3 <Server folder>/repomap.pyz <Workspace root>` trên
+    server (như chọn `1. Run scan`) rồi tự mở trang repomap. Chỉ cần thao tác trên trang PC. Nút đổi theo trạng thái: **Cancel** khi đang nối, **Disconnect** khi đã nối (đóng cửa
     sổ ssh, repomap trên server dừng theo; còn script đang chạy thì hỏi lại). **Check connection** hỏi repomap qua
     tunnel: phiên bản, workspace, số repo, script đang chạy, độ trễ.
   - Không chạy trùng: đang nối thì Connect lần nữa bị từ chối; tunnel cũ (cửa sổ khác) còn trả lời thì dùng lại; trên
-    server, repomap của chính bạn đã chạy ở port đó thì dùng chung, của user / chương trình khác thì báo đổi port.
+    server, repomap của chính bạn đã chạy ở port đó với cùng workspace thì dùng chung; khác workspace, hoặc của user /
+    chương trình khác, thì báo để dừng bản kia hoặc đổi port.
     Chưa Push, thiếu `python3`, port bận... đều có thông báo riêng.
 - **Saved servers**: tối đa 5 preset, chọn một preset để điền vào Configuration.
 

@@ -60,6 +60,11 @@
           <span class="muted">where <code>repomap.pyz</code> and <code>repomap.ini</code> go on the server</span></label>
         <input id="dir-in" placeholder="default .bin folder" spellcheck="false" autocomplete="off" maxlength="200">
         <div id="dir-hint" class="dir-hint"></div>
+        <label class="dir-lbl ws-lbl" for="ws-in"><b>Workspace root</b>
+          <span class="muted">the folder to scan when you press Connect (the one with <code>.repo/</code>)</span></label>
+        <input id="ws-in" placeholder="empty = home folder on the server (e.g. /home/worker)" spellcheck="false"
+          autocomplete="off" maxlength="300">
+        <div id="ws-hint" class="dir-hint"></div>
       </div>
       <div class="card pad deploy-card">
         <div class="deploy-row">

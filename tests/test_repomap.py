@@ -810,11 +810,13 @@ class LocalTest(unittest.TestCase):
 
     def test_check_cfg(self):
         self.assertEqual(local.check_cfg(self.CFG),
-                         {'host': 'h.vbee.lge.com', 'user': 'worker', 'port': 56614, 'srv': 6969, 'dir': ''})
+                         {'host': 'h.vbee.lge.com', 'user': 'worker', 'port': 56614, 'srv': 6969, 'dir': '', 'ws': ''})
         for bad, word in (({'host': ''}, 'host'), ({'user': 'a b'}, 'user'), ({'port': 'x'}, 'SSH port'),
                           ({'srv': '70000'}, 'local port'), ({'host': 'a&calc'}, 'host'),
                           ({'dir': 'a b'}, 'Server folder'), ({'dir': 'x;rm'}, 'Server folder'),
-                          ({'dir': '../etc'}, 'Server folder'), ({'dir': '-x'}, 'Server folder')):
+                          ({'dir': '../etc'}, 'Server folder'), ({'dir': '-x'}, 'Server folder'),
+                          ({'ws': '/w s'}, 'Workspace root'), ({'ws': '$(id)'}, 'Workspace root'),
+                          ({'ws': '~root/ws'}, 'Workspace root')):
             with self.assertRaisesRegex(ValueError, word):
                 local.check_cfg(dict(self.CFG, **bad))
 
@@ -838,8 +840,12 @@ class LocalTest(unittest.TestCase):
         run = local.tunnel_argv(cfg, local.remote_dir('tools'))        # Connect: tunnel + chay repomap.pyz luon
         self.assertEqual(run[:4], ['ssh', '-t', '-L', '6969:127.0.0.1:6969'])
         self.assertEqual(run[-2:], ['worker@h.vbee.lge.com', 'test -f tools/repomap.pyz || exit 3; '
-                                    'exec python3 tools/repomap.pyz --connect --port 6969'])
+                                    'exec python3 tools/repomap.pyz ~ --connect --port 6969'])   # trong = scan ~
         self.assertIn('"test -f tools/repomap.pyz || exit 3; exec', local.quote(run))
+        ws = local.check_cfg(dict(self.CFG, ws='/home/worker/android13/'))
+        self.assertTrue(local.tunnel_argv(ws, local.remote_dir(''))[-1].endswith(
+            'exec python3 .bin/repomap.pyz /home/worker/android13 --connect --port 6969'))
+        self.assertEqual(local.remote_ws('src/ws'), {'arg': 'src/ws', 'show': '~/src/ws', 'home': False})
         argv = local.deploy_argv(cfg, '/tmp/x/.bin')
         self.assertEqual(argv[:4], ['scp', '-r', '-P', '56614'])
         self.assertEqual(argv[-2:], ['/tmp/x/.bin', 'worker@h.vbee.lge.com:'])
@@ -851,12 +857,16 @@ class LocalTest(unittest.TestCase):
             f.write(local.server_ini(cfg))
         s = load_settings(path)
         self.assertEqual(s.tunnel_hint(s.port), 'ssh -N -L 6969:127.0.0.1:6969 -p 56614 worker@h.vbee.lge.com')
+        self.assertEqual(s.workspace, '')                                   # trong: menu tren server tu hoi
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(local.server_ini(ws))
+        self.assertEqual(load_settings(path).workspace, '/home/worker/android13')   # chay tay tren server cung dung
 
     def test_presets_max_and_overwrite(self):
         jobs = local.Jobs()
         for i in range(local.MAX_PRESETS):
             local.post(jobs, 'preset', dict(self.CFG, name='s%d' % i))
-        local.post(jobs, 'preset', dict(self.CFG, name='s0', port='22'))         # trung ten -> ghi de
+        local.post(jobs, 'preset', dict(self.CFG, name='s0', port='22', ws='~/ws0'))   # trung ten -> ghi de
         with self.assertRaisesRegex(ValueError, 'up to 5'):
             local.post(jobs, 'preset', dict(self.CFG, name='s9'))
         local.post(jobs, 'preset-del', {'name': 's1'})
@@ -864,7 +874,14 @@ class LocalTest(unittest.TestCase):
         st = local.state(jobs)
         self.assertEqual([p['name'] for p in st['presets']], ['s2', 's3', 's4', 's0'])
         self.assertEqual(st['presets'][-1]['port'], 22)
+        self.assertEqual(st['presets'][-1]['ws'], '~/ws0')                     # preset mang theo Workspace root
         self.assertEqual(st['config']['host'], 'h.vbee.lge.com')
+        orig, jobs.push = jobs.push, lambda cfg: None
+        try:                                              # Push / Connect nho gia tri vua dung (lan sau tu dien)
+            local.post(jobs, 'deploy', dict(self.CFG, ws='/srv/ws', dir='tools'))
+        finally:
+            jobs.push = orig
+        self.assertEqual((local.state(jobs)['config']['ws'], local.state(jobs)['config']['dir']), ('/srv/ws', 'tools'))
         self.assertEqual(local.post(jobs, 'quick', {'text': 'ssh -p 2 u@h'}),
                          {'host': 'h', 'user': 'u', 'port': 2, 'srv': 6969})
 
@@ -919,6 +936,13 @@ class LocalTest(unittest.TestCase):
                 self.assertEqual((info['app'], info['root'], info['running']), ('repomap', ws.root, 0))
                 self.assertEqual(info['user'], getpass.getuser())
                 self.assertEqual(cli.ping(port)['pid'], os.getpid())
+                with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as e:
+                    cli.attach_running(port, os.path.join(tmp, 'src'))      # repomap cua minh, workspace khac
+                self.assertEqual(e.exception.code, local.EXIT_OTHER_WS)
+                with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as e:
+                    cli.connect_workspace(parse_args([os.path.join(tmp, 'nope'), '--connect']), Settings())
+                self.assertEqual(e.exception.code, local.EXIT_NO_WS)
+                self.assertEqual(cli.connect_workspace(parse_args([tmp, '--connect']), Settings()), os.path.abspath(tmp))
             finally:
                 srv.shutdown()
                 srv.server_close()

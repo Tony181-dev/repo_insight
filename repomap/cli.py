@@ -1,8 +1,9 @@
 """Dong lenh:
   repomap [WORKSPACE]                 menu: 1. Run scan / 2. Configuration / 3. Quick setup / 0. Exit
   repomap --local                     tren PC: Connect (co Deploy) / Saved servers (xem local.py)
-  repomap --connect --port P          do nut Connect tren PC chay qua ssh: scan ngay workspace lan truoc
-                                      (= "1. Run scan"), dung dung port P; repomap cua minh dang chay o P thi dung chung
+  repomap ROOT --connect --port P     do nut Connect tren PC chay qua ssh: scan ngay ROOT (= "1. Run scan"; o
+                                      Workspace root tren trang PC, trong = ~), dung dung port P; repomap cua minh
+                                      dang chay o P cung workspace thi dung chung
   repomap WORKSPACE --run             bo qua menu, chay ngay (dung trong script)
   repomap WORKSPACE --json REPO       in JSON 1 repo roi thoat
 """
@@ -43,8 +44,9 @@ def parse_args(argv=None):
     ap.add_argument('--local', action='store_true',
                     help='on your PC: open the Connect / Saved servers page (Deploy is in Connect; needs ssh and scp)')
     ap.add_argument('--connect', action='store_true',
-                    help='used by the Connect button of the PC page (over ssh): scan the last workspace right away '
-                         'on exactly --port; if your own repomap already runs there, use it instead of a second one')
+                    help='used by the Connect button of the PC page (over ssh): scan ROOT (else the last workspace) '
+                         'right away on exactly --port; if your own repomap already runs there on the same '
+                         'workspace, use it instead of a second one')
     ap.add_argument('--json', metavar='REPO', help='print insight + deep scan of one repo as JSON and exit')
     ap.add_argument('--version', action='version', version='repomap ' + __version__)
     return ap.parse_args(argv)
@@ -124,9 +126,9 @@ def main(argv=None):
     saved = load_settings(a.config)
     root = a.root
     if a.connect:
-        if attach_running(a.port or saved.port):
-            return
         root = connect_workspace(a, saved)
+        if attach_running(a.port or saved.port, root):
+            return
     elif interactive(a):
         try:
             root = run_menu(saved, root)
@@ -171,13 +173,24 @@ def ping(port):
         return None
 
 
-def attach_running(port):
-    """Port da co repomap cua chinh user nay: khong chay ban thu 2, giu phien ssh (tunnel) cho toi khi repomap do
-    dung hoac cua so bi dong. Port bi chuong trinh / user khac chiem: bao loi, thoat ma 4 (PC hien thong bao)."""
+def _same_dir(a, b):
+    return bool(a and b) and os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b))
+
+
+def attach_running(port, root=None):
+    """Port da co repomap cua chinh user nay, cung workspace: khong chay ban thu 2, giu phien ssh (tunnel) cho toi khi
+    repomap do dung hoac cua so bi dong. Khac workspace: bao loi, ma 6 (khong am tham cho xem nham workspace).
+    Port bi chuong trinh / user khac chiem: bao loi, ma 4. PC hien thong bao theo ma thoat."""
     if not port_busy(port):
         return False
     log = lambda *x: print(*x, file=sys.stderr, flush=True)  # noqa: E731
     info = ping(port)
+    if info and info.get('user') == getpass.getuser() and root and not _same_dir(root, info.get('root')):
+        log('Your repomap already runs on port %d with workspace %s (pid %s), not %s.'
+            % (port, info.get('root'), info.get('pid'), root))
+        log('Stop it first (close its window, or kill %s), or use another "Server & local port" on the PC page.'
+            % info.get('pid'))
+        sys.exit(6)
     if info and info.get('user') == getpass.getuser():
         log('repomap is already running on port %d (workspace %s, pid %s): using it, not starting another one.'
             % (port, info.get('root'), info.get('pid')))
@@ -196,9 +209,17 @@ def attach_running(port):
 
 
 def connect_workspace(a, saved):
-    """Workspace cho --connect: tham so > file cau hinh > lan quet truoc (cache, con khi Push ghi de repomap.ini);
-    chua co thi hoi ngay trong cua so ssh."""
-    for root in (a.root, saved.workspace, last_workspace()):
+    """Workspace cho --connect: tham so (Workspace root tren trang PC, trong = ~) > file cau hinh > lan quet truoc
+    (cache); chua co thi hoi ngay trong cua so ssh. Tham so chi ro ma khong co thu muc: bao loi, ma 5."""
+    if a.root:
+        root = os.path.abspath(os.path.expanduser(a.root))
+        if not os.path.isdir(root):
+            print('Workspace root not found on this server: %s' % root, file=sys.stderr, flush=True)
+            print('Fix "Workspace root" on the PC page (empty = your home folder), then Connect again.',
+                  file=sys.stderr, flush=True)
+            sys.exit(5)
+        return root
+    for root in (saved.workspace, last_workspace()):
         if root and os.path.isdir(os.path.expanduser(root)):
             return root
     if not sys.stdin.isatty():

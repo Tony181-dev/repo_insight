@@ -4,7 +4,7 @@
 
 import { $, esc } from './util.js';
 
-const FORM = $('#cfg-form'), DIR = $('#dir-in'), MAIN = $('#connect');
+const FORM = $('#cfg-form'), DIR = $('#dir-in'), WS = $('#ws-in'), MAIN = $('#connect');
 const KEYS = ['host', 'user', 'port', 'srv'];
 let st = null, tab = 'connect', busy = false;
 
@@ -24,7 +24,19 @@ const spin = '<i class="spin"></i>';
 
 // ---------------------------------------------------------------- configuration
 
-const cfg = () => ({ ...Object.fromEntries(KEYS.map(k => [k, FORM.elements[k].value.trim()])), dir: DIR.value.trim() });
+const cfg = () => ({ ...Object.fromEntries(KEYS.map(k => [k, FORM.elements[k].value.trim()])), dir: DIR.value.trim(),
+  ws: WS.value.trim() });
+
+// "Workspace root" giong local.py remote_ws(): trong = ~ (home cua user ssh); duong dan tuong doi tinh tu ~
+function remoteWs(v) {
+  v = v.trim();
+  if (v.length > 1) v = v.replace(/\/+$/, '');
+  if (!v || v === '~') return { show: '~', home: true };
+  if (!/^[\w.~/+-]+$/.test(v) || v.startsWith('-'))
+    return { err: 'Use a path made of letters, digits and . _ - / ~ (no spaces).' };
+  if (/^~[^/]/.test(v)) return { err: '~user paths are not supported, write the full path.' };
+  return { show: v.startsWith('/') || v.startsWith('~') ? v : '~/' + v };
+}
 
 // "Server folder" giong local.py remote_dir(): trong = ~/.bin; ten = canh ~/.bin (tao neu chua co); duong dan = phai co san
 function remoteDir(v) {
@@ -55,6 +67,7 @@ const srvPort = () => cfg().srv || st?.defaultPort || 6969;
 function fill(c) {
   for (const k of KEYS) FORM.elements[k].value = c[k] ?? '';
   DIR.value = c.dir ?? '';
+  WS.value = c.ws ?? '';
   if (!FORM.elements.srv.value) FORM.elements.srv.value = st?.defaultPort || 6969;
   checkCfg(false);
 }
@@ -67,6 +80,7 @@ function checkCfg(showErrors = true) {
   const shown = showErrors && Object.entries(bad).filter(([k]) => c[k]).map(([, v]) => v);
   say($('#cfg-msg'), 'bad', shown && shown.length ? esc(shown.join(' · ')) : '');
   renderDir();
+  renderWs();
   renderDeploy();
   return ok;
 }
@@ -90,7 +104,7 @@ async function quickFill() {
   if (!text) return say($('#quick-msg'), 'bad', 'Paste the SSH command first.');
   const d = await call('quick', { text });
   if (d.error) return say($('#quick-msg'), 'bad', esc(d.error));
-  fill({ ...d, dir: DIR.value });
+  fill({ ...d, dir: DIR.value, ws: WS.value });
   saveCfg();
   say($('#quick-msg'), 'ok', `Filled in: ${esc(target(d))}, port ${d.srv}.`);
 }
@@ -122,7 +136,8 @@ function renderSaved() {
   $('#saved-list').innerHTML = ps.map((p, i) => `<div class="preset" data-i="${i}">
     <span class="dot" style="background:var(--acc)"></span>
     <div><b>${esc(p.name)}</b><div class="muted">${esc(target(p))} · port ${esc(p.srv)}${
-      p.dir ? ' · ' + esc(remoteDir(p.dir).show || p.dir) : ''}</div></div>
+      p.dir ? ' · ' + esc(remoteDir(p.dir).show || p.dir) : ''}</div>
+      <div class="muted">scan ${esc(p.ws ? remoteWs(p.ws).show || p.ws : '~ (home)')}</div></div>
     <button type="button" class="del" data-del="${i}" title="Delete">✕</button></div>`).join('');
 }
 
@@ -140,10 +155,20 @@ function renderDir() {
   else h.innerHTML = `→ <b>${esc(d.show)}</b>: this path must already exist on the server (Push reports an error if not).`;
 }
 
+function renderWs() {
+  const w = remoteWs(WS.value), h = $('#ws-hint');
+  WS.classList.toggle('bad', !!w.err);
+  h.classList.toggle('bad', !!w.err);
+  if (w.err) h.textContent = w.err;
+  else if (w.home) h.innerHTML = '→ scans your <b>home folder</b> on the server (e.g. /home/worker, where ~/.bin is). '
+    + 'Type the workspace path to scan only that.';
+  else h.innerHTML = `→ scans <b>${esc(w.show)}</b> on the server (Connect reports it if the folder is missing).`;
+}
+
 function renderDeploy() {
-  const c = cfg(), d = remoteDir(DIR.value), dir = d.show || '~/.bin';
+  const c = cfg(), d = remoteDir(DIR.value), dir = d.show || '~/.bin', w = remoteWs(WS.value);
   $('#dep-target').textContent = ready() ? `${c.user}@${c.host}:${dir}` : dir;
-  $('#dep-run').textContent = `python3 ${dir}/repomap.pyz`;
+  $('#dep-run').textContent = `python3 ${dir}/repomap.pyz ${w.err ? '…' : w.show}`;
   $('#dep-pyz').textContent = st ? ` (v${st.version})` : '';
 }
 
@@ -164,12 +189,16 @@ function renderJobs() {
   const url = t.url ? open(t.url) : '', dir = esc(t.dir || remoteDir(DIR.value).show || '~/.bin');
   renderMain(t);
   if (t.state === 'connecting') say(m, 'info', spin + 'Connecting… type your password in the SSH window if it asks.');
-  else if (t.state === 'starting') say(m, 'info', spin + 'Logged in. repomap is starting on the server (reading the '
-    + `workspace), the page opens by itself. First time: type the workspace path in the SSH window if it asks. ${url}`);
+  else if (t.state === 'starting') say(m, 'info', spin + 'Logged in. repomap is starting on the server (reading '
+    + `<code>${esc(t.ws || '~')}</code>), the page opens by itself. ${url}`);
   else if (t.state === 'up') say(m, 'ok', `Connected. Opened ${url}. Keep the SSH window open; `
     + '<b>Disconnect</b> closes it and stops repomap on the server.');
-  else if (t.state === 'external') say(m, 'ok', `Already connected through another SSH window: ${url}. `
-    + 'No second connection was opened.');
+  else if (t.state === 'external') say(m, 'ok', `Already connected through another SSH window: ${url}`
+    + (t.root ? ` (workspace <code>${esc(t.root)}</code>)` : '') + '. No second connection was opened.');
+  else if (t.state === 'nows') say(m, 'bad', `Workspace root <code>${esc(t.ws || '')}</code> was not found on the `
+    + 'server. Fix it above (empty = your home folder), then Connect.');
+  else if (t.state === 'otherws') say(m, 'bad', `Your repomap already runs on port ${esc(port)} with another workspace. `
+    + 'Close its SSH window (or stop it on the server), or change “Server &amp; local port”, then Connect.');
   else if (t.state === 'closed') say(m, 'info', 'Disconnected. Press Connect to start again.');
   else if (t.state === 'cancelled') say(m, 'info', 'Cancelled.');
   else if (t.state === 'nopyz') say(m, 'bad', `<code>repomap.pyz</code> is not in <code>${dir}</code> on the server yet. `
@@ -215,8 +244,9 @@ async function run(ep, btn, msg) {
     say(msg, 'bad', 'Set up the Configuration above first.');
     return toggle($('#cfg-toggle'), $('#cfg-body'), true);
   }
-  const dir = remoteDir(DIR.value);
+  const dir = remoteDir(DIR.value), ws = remoteWs(WS.value);
   if (dir.err) { DIR.focus(); return say(msg, 'bad', 'Server folder: ' + esc(dir.err)); }
+  if (ws.err) { WS.focus(); return say(msg, 'bad', 'Workspace root: ' + esc(ws.err)); }
   busy = btn === MAIN;
   btn.disabled = true;
   const d = await call(ep, cfg());
@@ -278,6 +308,7 @@ $('#save-toggle').addEventListener('click', e => { if (toggle(e.currentTarget, $
 FORM.addEventListener('input', saveCfg);
 FORM.addEventListener('submit', e => e.preventDefault());
 DIR.addEventListener('input', saveCfg);
+WS.addEventListener('input', saveCfg);
 $('#quick-go').addEventListener('click', quickFill);
 $('#quick-in').addEventListener('keydown', e => { if (e.key === 'Enter') quickFill(); });
 $('#quick-in').addEventListener('paste', () => setTimeout(quickFill, 0));

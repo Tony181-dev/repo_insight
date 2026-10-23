@@ -62,7 +62,8 @@ button.big { width: 100%; padding: 11px; font-size: 14px; font-weight: 600; }
 .dir-card { display: grid; gap: 7px; }
 .dir-lbl { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 12.5px; }
 .dir-lbl b { font-size: 13.5px; }
-#dir-in { width: 100%; box-sizing: border-box; }
+#dir-in, #ws-in { width: 100%; box-sizing: border-box; }
+.ws-lbl { margin-top: 8px; padding-top: 12px; border-top: 1px dashed var(--line); }
 .dir-hint { font-size: 12px; line-height: 1.5; color: var(--mute); }
 .dir-hint.bad { color: #ff7b72; }
 .dir-hint b { color: var(--fg); font-family: var(--mono); font-weight: 500; }
