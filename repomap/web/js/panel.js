@@ -5,7 +5,8 @@ import { $, esc, colorOf, KIND_COLOR, tail, store, SCRIPT } from './util.js';
 import { t, tl } from './i18n.js';
 import { labelOf } from './tree.js';
 import { createCodeView } from './codeview.js';
-import { statusText } from './build.js';
+import { statusText, logHtml, countsHtml, jumpLog } from './build.js';
+import { editorHtml, initEditor, refreshEditor } from './editor.js';
 
 const P = $('#panel');
 const RESIZER = $('#panel-resizer');
@@ -118,7 +119,7 @@ function repoPanel(n) {
   const scripts = i?.scripts || [], customLimit = scripts.length >= 3;
   let h = header(n, n.label, n.path)
     + tags((n.r.tags.length ? n.r.tags : [n.kind]).map(k => tag(k, KIND_COLOR[k])))
-    + `<div class="btns"><button class="pri" data-a="deep">${t(d ? 'rescan' : 'deepScan')}</button>
+    + `<div class="btns">${d ? `<button data-a="deep" title="${esc(t('rescanTitle'))}">${t('rescan')}</button>` : ''}
        <button data-a="copy" data-t="${esc(store.data.root + '/' + n.path)}">${t('copyPath')}</button>
        ${srcButton(n.path, '')}
        <button class="script-btn" data-a="${i?.script ? 'script-open' : 'script-create'}"${!i || (!i.script && store.data.noEdit)
@@ -137,8 +138,9 @@ function repoPanel(n) {
   if (i.dirs.length) {
     h += h4(t('topDirs'), t('dirsFiles', { d: i.dirs.length, f: i.nfiles })) + tags(i.dirs.map(x => tag(x + '/')));
   }
-  if (d?.error) h += `<div class="err">${esc(d.error)}</div>`;
-  else if (d) {
+  if (!d) h += h4(t('deepScan')) + `<div class="load">${t('scanning')}</div>`;
+  else if (d.error) h += `<div class="err">${esc(d.error)}</div>`;
+  else {
     h += h4(t('deepScan'), t('deepInfo', { n: d.total, src: d.src, s: d.took }))
       + `<div class="ls">${d.cats.map(c => `<a data-a="cat" data-c="${c.id}">
           <span class="dot" style="background:var(--cat)"></span> ${esc(tl(c.label))} <small>${c.count}</small></a>`).join('')}</div>`
@@ -201,7 +203,7 @@ function scriptStatus(n) {
 
 function scriptPanel(n) {
   const s = n.sc, ro = store.data.noEdit;
-  const name = n.scriptName || SCRIPT, title = n.customScript ? n.label : SCRIPT;
+  const name = n.scriptName || SCRIPT, title = n.label || name;
   const scriptColor = n.customScript ? '#39c5cf' : '#f0b429';
   let h = header(n, title, `${n.repo}/${name}`).replace(/background:[^"]+/, `background:${scriptColor}`)
     + tags([tag(t(n.customScript ? 'userScript' : 'buildScript'), scriptColor),
@@ -212,7 +214,7 @@ function scriptPanel(n) {
   const bd = n.bd, running = bd?.state === 'running', [bcls, bmsg] = statusText(bd, !!n.customScript), log = bd?.text || '';
   return h + `<div class="btns"><button class="pri" data-a="script-save"${off}>${t('save')}</button>
       ${n.customScript ? '' : `<button data-a="script-regen"${off}>${t('regenerate')}</button>`}
-      ${n.customScript ? `<button data-a="script-rename"${off}>${t('renameScript')}</button>` : ''}
+      <button data-a="script-rename"${off} title="${esc(t('renameHint'))}">${t('renameScript')}</button>
       <button class="icon-btn delete-script" data-a="script-delete"${off} title="${esc(t('deleteScript'))}"
         aria-label="${esc(t('deleteScript'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-.9 14H5.9L5 6m4 4v6m6-6v6"/></svg></button>
       <span class="sc-st ${cls}" id="sc-st">${esc(msg)}</span>
@@ -223,11 +225,11 @@ function scriptPanel(n) {
     <div class="muted sc-hint">${ro ? esc(t('readOnly', { why: ro })) : t(n.customScript ? 'userScriptHint' : 'scriptHint')}
       <span class="bd-st ${bcls}" id="bd-st">${esc(bmsg)}</span></div>
     ${bd?.error ? `<div class="err">${esc(bd.error)}</div>` : ''}
-    <textarea id="sc-ed" class="sc-ed${log ? ' with-log' : ''}" spellcheck="false" autocomplete="off"${
-      ro ? ' readonly' : ''}>${esc(s.draft ?? s.text)}</textarea>
+    ${editorHtml(s.draft ?? s.text, ro, log ? ' with-log' : '')}
     <div class="log-hd" id="bd-hd"${log ? '' : ' hidden'}><h4>${t(n.customScript ? 'scriptLog' : 'buildLog')}</h4>
+      <span class="lg-cnt" id="bd-cnt">${countsHtml(log)}</span>
       <button class="clear-log" data-a="script-log-clear"${off}>${t('clearLog')}</button></div>
-    <pre id="bd-log" class="bd-log"${log ? '' : ' hidden'}>${esc(log)}</pre>`;
+    <pre id="bd-log" class="bd-log"${log ? '' : ' hidden'}>${logHtml(log)}</pre>`;
 }
 
 export function scriptStatusRefresh(n) {
@@ -255,6 +257,7 @@ export function showPanel(n, keepScroll = false) {
   syncResizer();
   P.innerHTML = fn(n);
   P.scrollTop = keepScroll ? top : 0;
+  initEditor(P);
   const box = P.querySelector('#pcode');
   if (box) {
     code = createCodeView(box, { repo: n.repo, f: n.f, fv: n.fv });
@@ -293,6 +296,7 @@ export function bindPanel(actions) {
       case 'cat': return actions.cat(d.c);
       case 'src': return actions.src({ repo: d.repo, base: d.base, file: d.f });
       case 'line': return goLine(+d.n);
+      case 'log-jump': return jumpLog(d.k);
       case 'script-create': case 'script-open': case 'script-user-create': case 'script-save': case 'script-regen': case 'script-delete': case 'script-rename':
       case 'script-log-clear':
       case 'script-run': case 'script-stop':
@@ -314,6 +318,7 @@ export function bindPanel(actions) {
     if (e.target.id === 'sc-ed') {
       const n = store.sel;
       if (n?.sc) { n.sc.draft = e.target.value; n.sc.saveErr = ''; scriptStatusRefresh(n); }
+      refreshEditor(P);
       return;
     }
     const sel = e.target.dataset.flt;

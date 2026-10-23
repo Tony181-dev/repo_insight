@@ -1,24 +1,29 @@
 """Dong lenh:
   repomap [WORKSPACE]                 menu: 1. Run scan / 2. Configuration / 3. Quick setup / 0. Exit
   repomap --local                     tren PC: Connect (co Deploy) / Saved servers (xem local.py)
+  repomap --connect --port P          do nut Connect tren PC chay qua ssh: scan ngay workspace lan truoc
+                                      (= "1. Run scan"), dung dung port P; repomap cua minh dang chay o P thi dung chung
   repomap WORKSPACE --run             bo qua menu, chay ngay (dung trong script)
   repomap WORKSPACE --json REPO       in JSON 1 repo roi thoat
 """
 import argparse
 import dataclasses
+import getpass
 import json
 import os
 import signal
 import sys
 import threading
+import time
 import webbrowser
+from urllib.request import urlopen
 
 from . import __version__
 from .deepscan import deep_scan
 from .insight import insight
-from .menu import run_menu
+from .menu import ask, check_workspace, run_menu
 from .server import start_server
-from .settings import load_settings, save_settings, write_template
+from .settings import load_settings, port_busy, save_settings, write_template
 from .workspace import Workspace
 
 
@@ -37,6 +42,9 @@ def parse_args(argv=None):
     ap.add_argument('--workers', type=int, help='threads used to classify repos')
     ap.add_argument('--local', action='store_true',
                     help='on your PC: open the Connect / Saved servers page (Deploy is in Connect; needs ssh and scp)')
+    ap.add_argument('--connect', action='store_true',
+                    help='used by the Connect button of the PC page (over ssh): scan the last workspace right away '
+                         'on exactly --port; if your own repomap already runs there, use it instead of a second one')
     ap.add_argument('--json', metavar='REPO', help='print insight + deep scan of one repo as JSON and exit')
     ap.add_argument('--version', action='version', version='repomap ' + __version__)
     return ap.parse_args(argv)
@@ -62,7 +70,7 @@ def interactive(a):
     return not (a.run or a.json) and sys.stdin.isatty() and sys.stdout.isatty()
 
 
-def serve(ws, s):
+def serve(ws, s, connect=False):
     log = lambda *x: print(*x, file=sys.stderr)  # noqa: E731
     srv = start_server(ws, s.host, s.port, s.port_tries)
     port = srv.server_address[1]
@@ -72,8 +80,12 @@ def serve(ws, s):
         log('  NOTE   : port %d is already in use on this machine, using port %d instead.' % (s.port, port))
         log('           On your PC, set the port to %d (or stop whatever uses %d).' % (port, s.port))
     log('  UI     : %s   (Ctrl+C to stop)' % url)
-    log('  From your PC: run this and keep it open, then browse http://127.0.0.1:%d/' % (s.ssh_local_port or port))
-    log('    %s' % s.tunnel_hint(port))
+    if connect:
+        log('  Connected from the repomap PC page: it opens http://127.0.0.1:%d/ by itself.' % port)
+        log('  Keep this window open while you use it. Closing it (or Disconnect) stops repomap here.')
+    else:
+        log('  From your PC: run this and keep it open, then browse http://127.0.0.1:%d/' % (s.ssh_local_port or port))
+        log('    %s' % s.tunnel_hint(port))
     if s.should_open_browser():
         threading.Timer(0.5, lambda: webbrowser.open(url)).start()
     stop_on_signals()
@@ -111,7 +123,11 @@ def main(argv=None):
 
     saved = load_settings(a.config)
     root = a.root
-    if interactive(a):
+    if a.connect:
+        if attach_running(a.port or saved.port):
+            return
+        root = connect_workspace(a, saved)
+    elif interactive(a):
         try:
             root = run_menu(saved, root)
         except (KeyboardInterrupt, EOFError):
@@ -120,6 +136,8 @@ def main(argv=None):
         if not root:
             return
     s = apply_overrides(a, saved)
+    if a.connect:                          # tunnel tren PC noi dung port nay: khong tu doi sang port khac
+        s.port_tries, s.open_browser = 1, 'no'
     root = root or s.workspace
     if not root:
         sys.exit('missing workspace path: repomap /path/to/workspace  (or run it in a terminal to use the menu)')
@@ -140,11 +158,81 @@ def main(argv=None):
         return
 
     remember_workspace(a, s, ws.root)
-    serve(ws, s)
+    serve(ws, s, a.connect)
+
+
+# ---------------------------------------------------------------- --connect (nut Connect tren PC)
+
+def ping(port):
+    try:
+        with urlopen('http://127.0.0.1:%d/api/ping' % port, timeout=4) as r:
+            return json.load(r) if r.headers.get('Server', '').startswith('repomap/') else None
+    except Exception:  # noqa: BLE001 - khong phai repomap / ban cu khong co /api/ping
+        return None
+
+
+def attach_running(port):
+    """Port da co repomap cua chinh user nay: khong chay ban thu 2, giu phien ssh (tunnel) cho toi khi repomap do
+    dung hoac cua so bi dong. Port bi chuong trinh / user khac chiem: bao loi, thoat ma 4 (PC hien thong bao)."""
+    if not port_busy(port):
+        return False
+    log = lambda *x: print(*x, file=sys.stderr, flush=True)  # noqa: E731
+    info = ping(port)
+    if info and info.get('user') == getpass.getuser():
+        log('repomap is already running on port %d (workspace %s, pid %s): using it, not starting another one.'
+            % (port, info.get('root'), info.get('pid')))
+        log('Keep this window open while you use the page; close it (or Disconnect) to disconnect.')
+        stop_on_signals()
+        try:
+            while port_busy(port):
+                time.sleep(3)
+        except KeyboardInterrupt:
+            pass
+        return True
+    who = ("repomap of user '%s'" % info.get('user')) if info else 'another program'
+    log('Port %d on this server is already used by %s.' % (port, who))
+    log('On the PC page change "Server & local port", Push again, then Connect.')
+    sys.exit(4)
+
+
+def connect_workspace(a, saved):
+    """Workspace cho --connect: tham so > file cau hinh > lan quet truoc (cache, con khi Push ghi de repomap.ini);
+    chua co thi hoi ngay trong cua so ssh."""
+    for root in (a.root, saved.workspace, last_workspace()):
+        if root and os.path.isdir(os.path.expanduser(root)):
+            return root
+    if not sys.stdin.isatty():
+        sys.exit('no workspace yet: run  repomap /path/to/workspace  once on the server')
+    print('First time on this server: which workspace should repomap scan?')
+    try:
+        return ask('Workspace root (the folder that contains .repo/)', '', check_workspace)
+    except (KeyboardInterrupt, EOFError):
+        sys.exit(1)
+
+
+def _last_ws_file():
+    base = os.environ.get('REPOMAP_CACHE_DIR') or os.path.join(
+        os.environ.get('XDG_CACHE_HOME') or os.path.join(os.path.expanduser('~'), '.cache'), 'repomap')
+    return os.path.join(base, 'last-workspace')
+
+
+def last_workspace():
+    try:
+        with open(_last_ws_file(), encoding='utf-8') as f:
+            return f.read().strip()
+    except OSError:
+        return ''
 
 
 def remember_workspace(a, s, root):
-    """Luu workspace vao file cau hinh (chi truong nay, khong luu cac gia tri tam tu dong lenh)."""
+    """Luu workspace vao file cau hinh (chi truong nay, khong luu cac gia tri tam tu dong lenh), ca vao cache
+    (--connect doc lai khi repomap.ini canh repomap.pyz bi Push ghi de)."""
+    try:
+        os.makedirs(os.path.dirname(_last_ws_file()), exist_ok=True)
+        with open(_last_ws_file(), 'w', encoding='utf-8') as f:
+            f.write(root + '\n')
+    except OSError:
+        pass
     if s.workspace == root:
         return
     s.workspace = root

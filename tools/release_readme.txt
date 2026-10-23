@@ -38,11 +38,15 @@ CÁCH NHANH NHẤT: DÙNG repomap TRÊN PC WINDOWS (cần Python 3.8+ trên PC)
   1. Giải nén gói trên PC, nhấp đúp repomap-pc.cmd. Trình duyệt mở trang
      http://127.0.0.1:6960 với 2 tab: Connect / Saved servers.
   2. Tab Connect -> Configuration -> Quick setup: dán lệnh ssh của server.
-  3. Trong tab Connect, bấm Push to server: chép repomap.pyz + repomap.ini
-     vào ~/.bin trên server (gõ password trong cửa sổ ssh nếu được hỏi).
-  4. Trên server:  python3 ~/.bin/repomap.pyz ~/your_workspace_root  -> 1. Run scan
-  5. Trên PC: bấm Connect. Trang repomap tự mở khi server sẵn sàng.
-     Giữ cửa sổ ssh tunnel mở trong lúc dùng.
+  3. Server folder: để trống = ~/.bin; gõ tên thư mục (vd tools) = ~/tools,
+     tự tạo nếu chưa có; gõ đường dẫn (/opt/x) = thư mục phải có sẵn.
+  4. Bấm Push to server: chép repomap.pyz + repomap.ini vào thư mục đó
+     (gõ password trong cửa sổ ssh nếu được hỏi).
+  5. Bấm Connect: cửa sổ ssh vừa mở tunnel vừa chạy repomap.pyz trên server
+     (= 1. Run scan; lần đầu hỏi đường dẫn workspace ngay trong cửa sổ đó).
+     Trang repomap tự mở khi server sẵn sàng. Giữ cửa sổ ssh mở trong lúc
+     dùng; Disconnect đóng nó (repomap trên server dừng theo), Cancel khi
+     đang nối, Check connection để kiểm tra.
 
 
 XEM GIAO DIỆN TỪ PC BẰNG LỆNH

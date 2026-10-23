@@ -55,20 +55,31 @@
           </div>
         </div>
       </div>
+      <div class="card pad dir-card">
+        <label class="dir-lbl" for="dir-in"><b>Server folder</b>
+          <span class="muted">where <code>repomap.pyz</code> and <code>repomap.ini</code> go on the server</span></label>
+        <input id="dir-in" placeholder="default .bin folder" spellcheck="false" autocomplete="off" maxlength="200">
+        <div id="dir-hint" class="dir-hint"></div>
+      </div>
       <div class="card pad deploy-card">
         <div class="deploy-row">
           <div class="deploy-copy">
             <b>Deploy to server</b>
-            <span class="muted">Push <code>repomap.pyz</code><span id="dep-pyz"></span> and <code>repomap.ini</code> to <code id="dep-target">~/.bin</code> (created if needed).</span>
-            <span class="muted">Then on the server run <code id="dep-run">python3 ~/.bin/repomap.pyz</code> and choose <b>1. Run scan</b>.</span>
+            <span class="muted">Push <code>repomap.pyz</code><span id="dep-pyz"></span> and <code>repomap.ini</code> to <code id="dep-target">~/.bin</code>.</span>
+            <span class="muted">Then press <b>Connect</b>: it runs <code id="dep-run">python3 ~/.bin/repomap.pyz</code> there
+              (<b>1. Run scan</b>) and opens the page.</span>
           </div>
           <button type="button" class="pri" id="deploy">Push to server</button>
         </div>
         <div id="dep-msg" class="msg"></div>
         <div id="dep-cmd" class="cmdline"></div>
       </div>
-      <button type="button" class="pri big" id="connect">Connect</button>
+      <div class="conn-row">
+        <button type="button" class="pri big" id="connect" data-do="connect">Connect</button>
+        <button type="button" class="big" id="check" title="Ask repomap on the server if it answers through the tunnel">Check connection</button>
+      </div>
       <div id="conn-msg" class="msg"></div>
+      <div id="check-msg" class="msg"></div>
       <div id="conn-cmd" class="cmdline"></div>
     </section>
 

@@ -47,8 +47,12 @@ BIG_LAYER = 150          # layer Yocto nhieu recipe hon: chi hien 1 component to
 SKIP_SEG = {'test', 'tests', 'testing', 'unittest', 'unittests', 'testdata', 'example', 'examples', 'sample',
             'samples', 'benchmark', 'benchmarks', 'demo', 'demos', 'fuzz', 'fuzzer', 'fuzzers', 'doc', 'docs',
             'node_modules', 'vendor_modules'}
-HAL_SEG = {'hal', 'hals', 'hardware', 'hw', 'bsp', 'backend', 'backends', 'adapter', 'adapters', 'osal', 'porting',
-           'driver', 'drivers'}
+# duong dan / ten goi y tang HAL - chi ap dung cho code native (C/C++, Android, Yocto): "backend/", "drivers/" trong
+# project Python / npm / Go / Java la chuyen khac (web backend, driver database...)
+HAL_SEG = {'hal', 'hals', 'hardware', 'hw', 'bsp', 'osal', 'porting', 'driver', 'drivers'}
+NATIVE = {'c', 'android', 'yocto'}
+# he sinh thai co the phu thuoc lan nhau (ten thu vien C dung chung cho CMake, Android, recipe Yocto)
+ECO_GROUP = {'c': 'native', 'android': 'native', 'yocto': 'native'}
 HAL_NAME = re.compile(r'(^|[_\-.])(hal|hw|bsp|osal|drv|driver)s?($|[_\-.@])|^android\.hardware\.|^vendor\..*\.hardware\.',
                       re.I)
 TEST_NAME = re.compile(r'(^|[_\-.])(unit)?tests?($|[_\-.])|[a-z]Tests?$|(^|[_\-.])(bench|benchmark|fuzz|fuzzer|example|demo)'
@@ -132,14 +136,19 @@ class _Repo:
     def __init__(self, ws, p):
         self.ws, self.p, self.repo = ws, p, p['path']
         self.comps, self.svcs, self.links = [], [], defaultdict(list)
+        self.dflt = {}                 # Android *_defaults: ten -> [deps, defaults ke thua]
+        self.bb = []                   # recipe Yocto build repo trong workspace: [pn, [repo], [DEPENDS...]]
         self.has_src, self.failed = None, False
 
     def read(self, rel):
         return read_text(self.ws.abs(self.repo, rel)) or ''
 
-    def add(self, name, ctype, layer, f='', n=0, deps=(), eco='c', builds=(), note=''):
-        self.comps.append({'name': name, 'type': ctype, 'layer': layer, 'f': f, 'n': n, 'deps': list(deps),
-                           'eco': eco, 'builds': list(builds), 'note': note, 'repo': self.repo})
+    def add(self, name, ctype, layer, f='', n=0, deps=(), eco='c', builds=(), note='', **extra):
+        c = {'name': name, 'type': ctype, 'layer': layer, 'f': f, 'n': n, 'deps': list(deps),
+             'eco': eco, 'builds': list(builds), 'note': note, 'repo': self.repo}
+        c.update((k, v) for k, v in extra.items() if v)
+        self.comps.append(c)
+        return c
 
 
 # ---------------------------------------------------------------- C / C++ build systems
@@ -269,36 +278,53 @@ def _qnx(R, rel, text, files):
 # ---------------------------------------------------------------- Android
 
 def _android_kind(t, host):
-    """kieu module Soong/Make -> (type, layer) hoac None neu bo qua (test, defaults, filegroup...)."""
+    """kieu module Soong/Make -> (type, layer, ghi chu) hoac None neu bo qua (test, defaults, filegroup...).
+    Thu vien header-only va prebuilt (blob vendor) van la component: module khac link toi chung, bo qua thi
+    lien ket bi tinh nham thanh "thu vien ngoai workspace"."""
     t = t.lower()
-    if re.search(r'test|bench|fuzz|defaults|filegroup|genrule|prebuilt|headers|phony|license|soong_config|'
-                 r'apex_key|certificate|_import$|bootstrap_go|sdk_library_import', t):
+    if re.search(r'test|bench|fuzz|defaults|filegroup|genrule|phony|license|soong_config|'
+                 r'apex_key|certificate|bootstrap_go', t):
         return None
+    note = 'prebuilt' if 'prebuilt' in t or t.endswith('_import') else 'headers' if 'header' in t else ''
+    if note == 'prebuilt' and not re.search(r'library|binary|app_import|java_import|aar_import', t):
+        return None                                        # prebuilt_etc, prebuilt_firmware, ... : chi la file
     if t.endswith('_interface'):
-        return 'iface', 'hal'
+        return 'iface', 'hal', note
     if 'kernel_module' in t or t.startswith('ddk_'):
-        return 'kmod', 'kernel'
+        return 'kmod', 'kernel', note
     host = host or t.endswith('_host') or '_host_' in t
-    if t.endswith(('_binary', '_app', 'executable', 'package')) or t in ('android_app', 'build_package'):
-        return 'exe', 'build' if host else 'app'
-    if 'library' in t:
-        return 'lib', 'build' if host else 'lib'
+    if t.endswith(('_binary', '_app', 'executable', 'package', 'app_import')) or t in ('android_app', 'build_package'):
+        return 'exe', 'build' if host else 'app', note
+    if 'library' in t or 'header' in t or t.endswith(('java_import', 'aar_import')):
+        return 'lib', 'build' if host else 'lib', note
     return None
+
+
+def _android_add(R, rel, m, k, deps, defaults=()):
+    ctype, layer, note = k
+    if m.get('hw') and layer in ('app', 'lib'):            # cai vao bin/hw, co vintf_fragments: HAL service / impl
+        layer = 'hal'
+    R.add(m['name'], ctype, layer, rel, m['line'], deps, eco='android', note=note, dflt=list(defaults))
 
 
 def _android_bp(R, rel, text):
     for m in bp_modules(text):
+        if m['name'] == '?':
+            continue
+        deps = [d for d in m['deps'] if d not in m['defaults'] and not re.search(r'[-_]?defaults$', d)]
+        if m['type'].endswith('_defaults'):                 # deps khai bao o defaults: module dung defaults ke thua
+            R.dflt[m['name']] = [deps, m['defaults']]
+            continue
         k = _android_kind(m['type'], False)
-        if k and m['name'] != '?' and not TEST_NAME.search(m['name']):
-            deps = [d for d in m['deps'] if not re.search(r'[-_]?defaults$', d)]
-            R.add(m['name'], k[0], k[1], rel, m['line'], deps, eco='android')
+        if k and not TEST_NAME.search(m['name']):
+            _android_add(R, rel, m, k, deps, m['defaults'])
 
 
 def _android_mk(R, rel, text):
     for m in mk_modules(text):
         k = _android_kind(m['type'].replace('BUILD_', ''), 'HOST' in m['type'])
         if k and '$' not in m['name'] and not TEST_NAME.search(m['name']):
-            R.add(m['name'], k[0], k[1], rel, m['line'], m['deps'], eco='android')
+            _android_add(R, rel, m, k, m['deps'])
 
 
 # ---------------------------------------------------------------- Bazel, Go, Rust, JS, Java
@@ -326,7 +352,9 @@ def _go(R, gomod, files):
     pre = d + '/' if d else ''
     text = R.read(gomod)
     m = re.search(r'^module\s+(\S+)', text, re.M)
-    tail = (m.group(1) if m else (d or R.repo)).rstrip('/').rsplit('/', 1)[-1]
+    mod = m.group(1).rstrip('/') if m else ''
+    # .../foo/v2 -> foo (hau to phien ban chinh cua Go khong phai ten)
+    tail = re.sub(r'/v\d+$', '', mod or d or R.repo).rsplit('/', 1)[-1]
     gof = [f[len(pre):] for f in files if f.startswith(pre) and f.endswith('.go') and not f.endswith('_test.go')]
     apps = set()
     for f in gof:
@@ -335,12 +363,15 @@ def _go(R, gomod, files):
             apps.add('cmd/' + parts[1])
         elif parts[-1] == 'main.go':
             apps.add('/'.join(parts[:-1]))
-    deps = [x.split('/')[-1] for x in re.findall(r'^\s*(?:require\s+)?([\w.\-]+\.\w+/[\w.\-/]+)\s+v\S+[ \t]*$', text, re.M)]
+    # phu thuoc giu nguyen duong dan module: noi theo duong dan day du (module cua repo khac trong workspace)
+    # (bo "// indirect": phu thuoc bac cau)
+    deps = [x for x, cm in re.findall(r'^\s*(?:require\s+)?([\w.\-]+\.\w+/[\w.\-/]+)\s+v\S+[ \t]*(//.*)?$', text, re.M)
+            if 'indirect' not in cm]
     for a in sorted(apps):
         R.add(a.rsplit('/', 1)[-1] if a else tail, 'exe', 'app', pre + (a + '/' if a else '') + 'main.go', 0, deps, 'go')
     in_app = lambda f: any(_dir(f) == a or _dir(f).startswith(a + '/') for a in apps)  # noqa: E731
     if any(not in_app(f) for f in gof):
-        R.add(tail, 'lib', 'lib', gomod, 1, deps, 'go')
+        R.add(tail, 'lib', 'lib', gomod, 1, deps, 'go', alias=[mod] if mod else [])
 
 
 def _cargo(R, rel, text, files):
@@ -453,17 +484,32 @@ def _python(R, projs, reqs, files):
 
 # ---------------------------------------------------------------- service, container, DevOps
 
+# service: (unit, ten binary, file, dong, duong dan binary, [unit can co: Requires= / Wants= / BindsTo=])
+
 def _systemd(R, rel, text):
     m = re.search(r'^\s*ExecStart\s*=\s*[-@+!:]*(\S+)', text, re.M)
     unit = re.sub(r'@?\.service$', '', rel.rsplit('/', 1)[-1])
-    exe = m.group(1).rsplit('/', 1)[-1] if m else ''
-    R.svcs.append((unit, unit if not exe or exe in SHELLS else exe, rel, _ln(text, m.start()) if m else 1))
+    path = m.group(1) if m else ''
+    exe = path.rsplit('/', 1)[-1]
+    needs = [re.sub(r'@?\.service$', '', x) for k in re.findall(r'^\s*(?:Requires|Wants|BindsTo)\s*=\s*(.+)$', text, re.M)
+             for x in k.split() if x.endswith('.service')]
+    R.svcs.append((unit, unit if not exe or exe in SHELLS else exe, rel, _ln(text, m.start()) if m else 1, path, needs))
 
 
 def _init_rc(R, rel, text):
     for m in re.finditer(r'^\s*service\s+(\S+)\s+(\S+)', text, re.M):
         exe = m.group(2).rsplit('/', 1)[-1]
-        R.svcs.append((m.group(1), m.group(1) if exe in SHELLS else exe, rel, _ln(text, m.start())))
+        R.svcs.append((m.group(1), m.group(1) if exe in SHELLS else exe, rel, _ln(text, m.start()), m.group(2), []))
+
+
+def _svc_layer(path):
+    """Tang goi y tu duong dan binary cua service: Android .../bin/hw/ = HAL service; /vendor, /odm = daemon cua
+    nen tang (vendor). None = khong biet (giu tang cua binary / tang app)."""
+    if re.search(r'(^|/)bin/hw/', path):
+        return 'hal'
+    if re.match(r'/(vendor|odm)/', path):
+        return 'hal'
+    return None
 
 
 def _compose(R, rel, text):
@@ -488,7 +534,8 @@ def _compose(R, rel, text):
                     deps.append(mm.group(1))
         img = re.search(r'^[ \t]*image[ \t]*:[ \t]*["\']?([^"\'\s#]+)', block, re.M)
         note = img.group(1) if img and not re.search(r'^[ \t]*build[ \t]*:', block, re.M) else ''
-        R.add(name, 'container', 'app', rel, ln, deps, 'docker', note=note)
+        # chi co image (postgres, redis...): service ben thu ba, khong phai code cua repo -> tang thu vien ngoai
+        R.add(name, 'container', 'ext' if note else 'app', rel, ln, deps, 'docker', note=note)
 
 
 def _devops(R, b):
@@ -515,6 +562,32 @@ def _devops(R, b):
 
 # ---------------------------------------------------------------- Yocto, kernel, board
 
+def _recipe_layer(pn, f):
+    cat = next((s for s in f.split('/') if s.startswith('recipes-')), '')
+    if pn.endswith(('-native', '-cross')) or pn.startswith(('nativesdk-', 'cross-')) or cat == 'recipes-devtools':
+        return 'build'                                     # cong cu chay tren may build, khong vao image
+    if cat == 'recipes-kernel' or pn.startswith(('linux-', 'kernel-module')):
+        return 'kernel'
+    if cat == 'recipes-bsp' or 'u-boot' in pn or 'firmware' in pn:
+        return 'board'
+    if '-image' in pn or '/images/' in f:
+        return 'build'
+    if (pn.startswith(('lib', 'python3-', 'python-', 'perl-', 'ruby-', 'nodejs-')) or pn.endswith(('-lib', '-libs'))
+            or cat == 'recipes-support'):
+        return 'lib'
+    return 'app'
+
+
+def _bb_depends(vs, pn):
+    """DEPENDS (build) + RDEPENDS cua goi chinh (${PN}) -> ten recipe; bo virtual/, -native, bien chua thay."""
+    out = []
+    for _, k, _, v in vs:
+        if k == 'DEPENDS' or re.match(r'RDEPENDS[:_](\$\{PN\}|%s)$' % re.escape(pn), k):
+            out += [x for x in re.sub(r'\([^)]*\)', ' ', v).split()
+                    if '$' not in x and not x.startswith('virtual/') and not x.endswith('-native')]
+    return list(dict.fromkeys(out))
+
+
 def _yocto(R, files):
     d = R.ws.abs(R.repo)
     for L in find_layers(d)[:40]:
@@ -527,25 +600,17 @@ def _yocto(R, files):
         builds, small = set(), len(recipes) <= BIG_LAYER
         for f in recipes if small else []:
             pn = bb_name(f)[0]
-            refs = src_uri_refs(parse_vars(R.read(f), 'bb'))
+            vs = parse_vars(R.read(f), 'bb')
+            refs = src_uri_refs(vs)
             targets = {to['repo'] for to in (resolve_ref(R.ws, R.repo, f, 'src', r['raw']) for r in refs) if to}
+            deps = _bb_depends(vs, pn)
             if targets:                                      # source nam trong workspace: repo do tu hien
                 builds |= targets
+                R.bb.append([pn, sorted(targets), deps])
                 continue
-            cat = next((s for s in f.split('/') if s.startswith('recipes-')), '')
             if 'packagegroup' in pn:
                 continue
-            if cat == 'recipes-kernel' or pn.startswith(('linux-', 'kernel-module')):
-                layer = 'kernel'
-            elif cat == 'recipes-bsp' or 'u-boot' in pn or 'firmware' in pn:
-                layer = 'board'
-            elif '-image' in pn or '/images/' in f:
-                layer = 'build'
-            elif pn.startswith('lib') or pn.endswith(('-lib', '-libs')):
-                layer = 'lib'
-            else:
-                layer = 'app'
-            R.add(pn, 'recipe', layer, f, 1, eco='yocto')
+            R.add(pn, 'recipe', _recipe_layer(pn, f), f, 1, deps, eco='yocto')
         R.add(lname, 'layer', 'build', pre + 'conf/layer.conf', 1, builds=sorted(builds),
               note='%d recipes' % len(recipes))
         for mf in lfiles:
@@ -667,7 +732,7 @@ def scan_repo(ws, p, refresh=False):
         _init_rc(R, f, R.read(f))
     for f in b['initd']:
         n = re.sub(r'^[SK]\d\d', '', f.rsplit('/', 1)[-1])
-        R.svcs.append((n, n, f, 1))
+        R.svcs.append((n, n, f, 1, '', []))
     for f in b['compose']:
         _compose(R, f, R.read(f))
     _board(R, b, files)
@@ -680,19 +745,40 @@ def scan_repo(ws, p, refresh=False):
 # ---------------------------------------------------------------- toan workspace
 
 def _refine(c):
-    """Doi tang theo duong dan / ten: thu vien, process nam duoi hal/, hardware/, drivers/... -> tang HAL."""
-    if c['layer'] not in ('app', 'lib'):
+    """Doi tang theo duong dan / ten: thu vien, process native nam duoi hal/, hardware/, drivers/... -> tang HAL."""
+    if c['layer'] not in ('app', 'lib') or c['eco'] not in NATIVE:
         return
     segs = {s.lower() for s in (c['repo'] + '/' + c['f']).split('/')[:-1]}
     if segs & HAL_SEG or HAL_NAME.search(c['name']):
         c['layer'] = 'hal'
 
 
-def _keys(name):
+def _group(eco):
+    return ECO_GROUP.get(eco, eco)
+
+
+def _keys(name, eco='c'):
+    """Cac khoa de so ten phu thuoc voi ten component, trong cung nhom he sinh thai.
+    Native: foo = libfoo = libfoo.so; Python: ten goi chuan hoa (PEP 503: Foo_Bar = foo-bar)."""
     n = name.lower()
+    if eco == 'py':
+        return {re.sub(r'[-_.]+', '-', n)}
+    if _group(eco) != 'native':
+        return {n}
     n = re.sub(r'\.(so|a|la)$', '', n)
     base = n[3:] if n.startswith('lib') and len(n) > 3 else n
     return {n, base, 'lib' + base}
+
+
+# khi 1 ten phu thuoc khop nhieu component: uu tien cung repo, cung he sinh thai, roi thu vien truoc chuong trinh
+RANK = {'lib': 0, 'iface': 0, 'recipe': 1, 'kmod': 2, 'driver': 2, 'container': 2, 'exe': 3, 'kernel': 4, 'boot': 4,
+        'tool': 4}
+NO_INDEX = {'svc', 'layer', 'ci', 'infra', 'machine', 'repo', 'dt', 'image', 'board'}
+
+
+def _pick(c, cands):
+    same = [x for x in cands if x['repo'] == c['repo']]
+    return min(same or cands, key=lambda x: (x['eco'] != c['eco'], RANK.get(x['type'], 5), x['repo'], x['name']))
 
 
 def _ext_name(eco, d):
@@ -722,7 +808,7 @@ def _scan_safe(ws, p, refresh, errors):
 # Ket qua quet 1 repo duoc dung lai o lan mo sau neu repo do chua doi: cung HEAD (commit) va cung mtime cua
 # .git/index (doi khi checkout / repo sync / commit). Sua file ma chua commit thi khong nhan ra: dung nut Rescan.
 
-CACHE_VER = 1
+CACHE_VER = 2
 
 
 def cache_file(ws):
@@ -793,80 +879,153 @@ def build_arch(ws, refresh=False):
         if key and hit and hit.get('k') == key:
             hits[0] += 1
             entries[p['path']] = hit
-            return hit['comps'], hit['svcs']
+            return hit['comps'], hit['svcs'], hit.get('dflt', {}), hit.get('bb', [])
         R = _scan_safe(ws, p, refresh, errors)
         if key and not R.failed:
-            entries[p['path']] = {'k': key, 'comps': R.comps, 'svcs': [list(s) for s in R.svcs]}
-        return R.comps, R.svcs
+            entries[p['path']] = {'k': key, 'comps': R.comps, 'svcs': [list(s) for s in R.svcs], 'dflt': R.dflt,
+                                  'bb': R.bb}
+        return R.comps, R.svcs, R.dflt, R.bb
 
     with ThreadPoolExecutor(max(1, ws.workers)) as ex:
         results = list(ex.map(one, ws.repos))
     if entries:
         _save_cache(cpath, entries)                      # ghi truoc khi buoc gop ben duoi sua cac component
 
-    comps, svcs = [], []
-    for p, (rcomps, rsvcs) in zip(ws.repos, results):
+    comps, svcs, dflt, bbs = [], [], {}, []
+    for p, (rcomps, rsvcs, rdflt, rbb) in zip(ws.repos, results):
         seen = set()
         for c in rcomps:
             key = (c['name'], c['layer'], c['type'])
             if key not in seen:
                 seen.add(key)
-                comps.append(c)
+                comps.append(dict(c, deps=list(c['deps'])))      # ban sao: buoc gop sua component, cache giu nguyen
         svcs += [(p['path'],) + tuple(s) for s in rsvcs]
+        for k, v in rdflt.items():
+            dflt.setdefault(k, v)
+        bbs += rbb
     for c in comps:
         _refine(c)
 
-    # service (systemd / init) -> danh dau binary tuong ung la service, khong thi tao component rieng
-    exes, units = defaultdict(list), set()
+    # Android *_defaults: deps khai bao trong defaults (ca defaults long nhau, o repo khac) thuoc ve module dung no
+    def inherited(name, seen):
+        if name in seen or name not in dflt:
+            return []
+        seen.add(name)
+        deps, parents = dflt[name]
+        return list(deps) + [d for x in parents for d in inherited(x, seen)]
+    for c in comps:
+        seen = set()
+        for x in c.get('dflt', ()):
+            c['deps'] += inherited(x, seen)
+
+    # service (systemd / init) -> danh dau binary tuong ung la service, khong thi tao component rieng.
+    # Binary nam o .../bin/hw/, /vendor/... (theo init .rc) -> tang HAL / nen tang, du file build nam o dau.
+    exes, made, units, needs, starts = defaultdict(list), set(), {}, [], []
     for c in comps:
         if c['type'] in ('exe', 'container'):
             exes[c['name'].lower()].append(c)
-    for repo, unit, exe, rel, ln in svcs:
+    for repo, unit, exe, rel, ln, path, need in svcs:
         cands = exes.get(exe.lower()) or exes.get(unit.lower()) or []
         cands = [c for c in cands if c['repo'] == repo] or cands
+        hint = _svc_layer(path)
         if cands:
-            for c in cands[:1]:
-                c['svc'] = True
-                c.setdefault('units', []).append(unit)
-        elif (repo, unit.lower()) not in units:
-            units.add((repo, unit.lower()))
-            c = {'name': unit, 'type': 'svc', 'layer': 'app', 'f': rel, 'n': ln, 'deps': [], 'eco': 'c',
+            c = cands[0]
+            c['svc'] = True
+            c.setdefault('units', []).append(unit)
+            if hint and c['layer'] in ('app', 'lib'):
+                c['layer'] = hint
+            if c['repo'] != repo:                         # .rc / .service o repo khac (vd device/) khoi chay binary nay
+                starts.append((repo, c))
+        elif (repo, unit.lower()) not in made:
+            made.add((repo, unit.lower()))
+            c = {'name': unit, 'type': 'svc', 'layer': hint or 'app', 'f': rel, 'n': ln, 'deps': [], 'eco': 'c',
                  'builds': [], 'note': exe if exe != unit else '', 'repo': repo, 'svc': True}
             _refine(c)
             comps.append(c)
+        else:
+            continue
+        units.setdefault(unit.lower(), c)
+        if need:
+            needs.append((c, need))
 
-    # chi muc ten -> component (de noi phu thuoc)
+    # chi muc (nhom he sinh thai, ten) -> component (de noi phu thuoc)
     idx = defaultdict(list)
     for c in comps:
-        if c['type'] not in ('svc', 'layer', 'ci', 'infra', 'machine', 'repo'):
-            for k in _keys(c['name']):
-                idx[k].append(c)
+        if c['type'] not in NO_INDEX:
+            for k in set().union(_keys(c['name'], c['eco']), *(_keys(a, c['eco']) for a in c.get('alias', ()))):
+                idx[(_group(c['eco']), k)].append(c)
 
     bid = lambda c: c['repo'] + '#' + c['layer']  # noqa: E731
-    edges, ext = Counter(), defaultdict(Counter)
-    by_repo = defaultdict(set)
+    size, by_repo = Counter(bid(c) for c in comps), defaultdict(set)
     for c in comps:
         by_repo[c['repo']].add(bid(c))
+    order = {k: i for i, (k, _) in enumerate(LAYERS)}
+
+    def main_box(repo):
+        """Khoi dai dien 1 repo (noi lien ket cap repo: recipe Yocto, file service): nhieu component nhat,
+        uu tien tang code (app/HAL/lib...) hon build."""
+        ids = [b for b in by_repo.get(repo, ()) if not b.endswith('#ext')]
+        return min(ids, key=lambda b: (b.endswith('#build'), -size[b], order[b.rsplit('#', 1)[1]]), default=None)
+
+    edges, ext = Counter(), defaultdict(Counter)
+
+    def link(c, t, kind='use'):
+        """c dung t (component -> component): ghi o ca 2 dau de panel hien ten va bam toi khoi ben kia."""
+        c.setdefault('uses', []).append([t['name'], bid(t)])
+        t.setdefault('usedBy', []).append([c['name'], bid(c)])
+        if bid(t) != bid(c):
+            edges[(bid(c), bid(t), kind)] += 1
+
+    pn_repos = defaultdict(set)                          # recipe Yocto -> repo trong workspace ma no build
+    for pn, targets, _ in bbs:
+        pn_repos[pn].update(targets)
+
     for c in comps:
         for d in dict.fromkeys(c['deps']):
-            cands = []
-            for k in _keys(d):
-                cands += [x for x in idx.get(k, []) if x is not c]
+            cands = [x for k in _keys(d, c['eco']) for x in idx.get((_group(c['eco']), k), []) if x is not c]
             if cands:
-                t = ([x for x in cands if x['repo'] == c['repo']] or sorted(cands, key=lambda x: x['repo']))[0]
-                c.setdefault('uses', []).append(t['name'])
-                if bid(t) != bid(c):
-                    edges[(bid(c), bid(t), 'use')] += 1
+                link(c, _pick(c, cands))
+            elif c['eco'] == 'yocto' and d in pn_repos:   # recipe -> recipe build tu repo trong workspace
+                for y in sorted(pn_repos[d]):
+                    b = main_box(y)
+                    if b and b != bid(c):
+                        edges[(bid(c), b, 'use')] += 1
+                        c.setdefault('uses', []).append([d, b])
             elif c['eco'] in ECO_LABEL:
                 name = _ext_name(c['eco'], d)
                 eco = 'c' if c['eco'] == 'android' and name.startswith('C/C++') else c['eco']
                 ext[eco][name] += 1
                 edges[(bid(c), 'ext#' + eco, 'use')] += 1
-                c.setdefault('uses', []).append(name)
+                c.setdefault('uses', []).append([name, 'ext#' + eco])
         for repo in c['builds']:
             for b in by_repo.get(repo, ()):
                 if b != bid(c):
                     edges[(bid(c), b, 'build')] += 1
+
+    # recipe Yocto build repo X, DEPENDS recipe build repo Y (hoac recipe / thu vien khac) -> X dung Y
+    for pn, targets, deps in bbs:
+        for x in targets:
+            src = main_box(x)
+            if not src:
+                continue
+            for d in deps:
+                dst = {main_box(y) for y in pn_repos.get(d, ()) if y != x}
+                if not dst:
+                    cands = [t for k in _keys(d, 'yocto') for t in idx.get(('native', k), []) if t['repo'] != x]
+                    dst = {bid(_pick({'repo': x, 'eco': 'yocto'}, cands))} if cands else set()
+                for b in dst - {None, src}:
+                    edges[(src, b, 'use')] += 1
+    # service can service khac (Requires= / Wants=)
+    for c, need in needs:
+        for u in need:
+            t = units.get(u.lower())
+            if t is not None and t is not c:
+                link(c, t)
+    # file .rc / .service o repo A khoi chay binary cua repo B
+    for repo, c in starts:
+        src = main_box(repo)
+        if src and src != bid(c):
+            edges[(src, bid(c), 'start')] += 1
 
     boxes = {}
     kind_of = {p['path']: p['kind'] for p in ws.repos}
@@ -879,20 +1038,22 @@ def build_arch(ws, refresh=False):
             out['note'] = c['note']
         if c.get('svc'):
             out['svc'] = c.get('units') or [c['name']]
-        if c.get('uses'):
-            out['uses'] = list(dict.fromkeys(c['uses']))[:30]
+        for k in ('uses', 'usedBy'):
+            if c.get(k):
+                out[k] = list(dict((tuple(x), x) for x in c[k]).values())[:30]
         b['comps'].append(out)
     for eco, cnt in ext.items():
         boxes['ext#' + eco] = {'id': 'ext#' + eco, 'repo': '', 'layer': 'ext', 'kind': 'ext', 'label': ECO_LABEL[eco],
                                'comps': [{'name': n, 'type': 'ext', 'note': '%d' % k} for n, k in cnt.most_common()]}
     for b in boxes.values():
-        if b['layer'] != 'ext':
-            b['comps'].sort(key=lambda x: (TYPE_ORDER.get(x['type'], 5) - (0.5 if x.get('svc') else 0), x['name'].lower()))
+        if b['layer'] != 'ext' or b['repo']:
+            # binary chay nhu service truoc, roi unit service khong co binary, chuong trinh, thu vien...
+            b['comps'].sort(key=lambda x: (-1 if x.get('svc') and x['type'] != 'svc' else TYPE_ORDER.get(x['type'], 5),
+                                           x['name'].lower()))
         b['total'] = len(b['comps'])
         b['n'] = dict(Counter('svc' if c.get('svc') else c['type'] for c in b['comps']))   # tom tat khi thu gon
         b['comps'] = b['comps'][:MAX_EXT if b['layer'] == 'ext' else MAX_COMPS]
 
-    order = {k: i for i, (k, _) in enumerate(LAYERS)}
     return {'layers': [{'id': k, 'label': v} for k, v in LAYERS],
             'boxes': sorted(boxes.values(), key=lambda b: (order[b['layer']], b['repo'], b['label'])),
             'edges': [[a, b, n, k] for (a, b, k), n in sorted(edges.items())],

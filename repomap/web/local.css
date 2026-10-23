@@ -59,7 +59,25 @@ button.big { width: 100%; padding: 11px; font-size: 14px; font-weight: 600; }
 .files { margin: 0 0 14px; padding-left: 18px; line-height: 1.9; }
 .next { color: var(--mute); line-height: 1.9; padding-left: 20px; }
 
+.dir-card { display: grid; gap: 7px; }
+.dir-lbl { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 12.5px; }
+.dir-lbl b { font-size: 13.5px; }
+#dir-in { width: 100%; box-sizing: border-box; }
+.dir-hint { font-size: 12px; line-height: 1.5; color: var(--mute); }
+.dir-hint.bad { color: #ff7b72; }
+.dir-hint b { color: var(--fg); font-family: var(--mono); font-weight: 500; }
+.conn-row { display: flex; gap: 10px; }
+.conn-row #connect { flex: 1; }
+.conn-row #check { width: auto; flex: 0 0 auto; padding: 11px 16px; }
+#connect.stop { background: #da3633; border-color: #da3633; color: #fff; }
+#connect.stop:hover { background: #f85149; border-color: #f85149; }
+#connect.wait { background: var(--bg3); border-color: #d29922; color: #e3b341; }
+.msg .spin { display: inline-block; width: 9px; height: 9px; margin-right: 7px; border-radius: 50%;
+  border: 2px solid currentColor; border-right-color: transparent; animation: spin .8s linear infinite; vertical-align: -1px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
 @media (max-width: 520px) {
+  .conn-row { flex-direction: column; }
   .fields { grid-template-columns: 1fr; }
   .deploy-row { align-items: stretch; flex-direction: column; gap: 10px; }
 }

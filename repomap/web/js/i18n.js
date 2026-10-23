@@ -8,17 +8,18 @@ const DICT = {
     panelToggle: 'Show or hide the panel',
     panelResize: 'Resize details panel',
     langTitle: 'Interface language',
-    fit: 'Fit', expand: 'Expand one level', collapse: 'Collapse',
+    fit: 'Fit', collapse: 'Collapse all', collapseNode: 'Collapse node',
+    collapseNodeTitle: 'Fold the selected node and everything under it (a closed node: fold its parent)',
     loading: 'Reading manifest…',
     help: 'Click a repo in the tree to see its details.<br><br>' +
-      '• Click a repo: quick facts and key files<br>' +
-      '• <b>Deep scan</b>: every build and config file, recipes, modules<br>' +
+      '• Click a repo: quick facts, key files, and a full scan of every build and config file (recipes, modules)<br>' +
       '• Click a file: variables and resolved include/require/inherit; click again to go deeper<br><br>' +
       'Drag to move, scroll to zoom, <b>/</b> to search.',
     status: '{n} repos, {mode}, {s}s',
     noMatch: 'No matches',
     noRepos: 'No repos found (no .repo/manifest.xml and no .git folders).',
-    scanning: 'Scanning…', deepScan: 'Deep scan', rescan: 'Rescan',
+    scanning: 'Scanning…', deepScan: 'Build & config files', rescan: 'Rescan',
+    rescanTitle: 'Scan this repo again (files changed since the last scan)',
     copyPath: 'Copy path', copied: 'Copied', reading: 'Reading…',
     repoKinds: 'Repo kinds', repos: 'Repos',
     keyFiles: 'Key files', keyFilesCat: 'key files',
@@ -34,7 +35,7 @@ const DICT = {
     creating: 'Creating…', buildScript: 'Build script', save: 'Save', saving: 'Saving…', savedAt: 'Saved {t}', unsaved: 'Unsaved changes',
     regenerate: 'Regenerate', regenAsk: 'Replace this script with a freshly generated one? Your edits will be lost.',
     deleteScript: 'Delete script', deleteAsk: 'Delete {name}? This cannot be undone.', yes: 'Yes', no: 'No',
-    ok: 'OK', cancel: 'Cancel', renameScript: 'Rename', scriptNamePrompt: 'Enter a name for this script',
+    ok: 'OK', cancel: 'Cancel', renameScript: 'Rename', renameHint: 'Rename this file (repomap_<name>.sh)', scriptNamePrompt: 'Enter a name for this script',
     scriptNamePlaceholder: 'e.g. clean-cache', scriptNamePreview: 'File name: {name}',
     scriptNameInvalid: 'Use 1–64 letters, digits, dots, underscores or hyphens; start with a letter or digit.',
     scriptNameReserved: 'That name is reserved for the build script.',
@@ -43,7 +44,8 @@ const DICT = {
     userScriptHint: 'Write your script here, then Save (Ctrl+S). It runs with bash in this module folder.',
     readOnly: 'Read only: {why}',
     runBuild: '▶ Run build', runScript: '▶ Run script', stopBuild: '■ Stop', buildLog: 'Build log', scriptLog: 'Script log',
-    clearLog: 'Clear log', stopAsk: 'Stop this build?', stopScriptAsk: 'Stop this script?',
+    clearLog: 'Clear log', logErrors: '{n} errors', logWarnings: '{n} warnings', logError1: '1 error', logWarning1: '1 warning',
+    logNextErr: 'Go to the next error', logNextWarn: 'Go to the next warning', stopAsk: 'Stop this build?', stopScriptAsk: 'Stop this script?',
     buildRunning: 'Running… {t}', buildDone: 'Finished OK in {t}', buildFailed: 'Failed (exit {c}) after {t}',
     buildStopped: 'Stopped after {t}',
     scriptRunning: 'Running… {t}', scriptDone: 'Finished OK in {t}', scriptFailed: 'Failed (exit {c}) after {t}',
@@ -62,13 +64,14 @@ const DICT = {
       '• Each band is a layer: applications/services, libraries, platform/HAL, external libraries, kernel/drivers, ' +
       'board/BSP, build/tooling<br>• Each block is one repo in that layer, with the components found in it<br>' +
       '• Blocks are collapsed: click one to open it and draw its links (green = what it uses, ' +
-      'dashed yellow = who uses it); click it again to close<br>' +
+      'dashed yellow = who uses it; dotted = builds, dash-dot = starts as a service); click it again to close<br>' +
+      '• In the panel, each component lists what it uses and who uses it: click a name to jump to that block<br>' +
       '• Scroll to zoom, drag to move; click the layer chips to hide or show a layer',
     expandAll: 'Expand all', collapseAll: 'Collapse all', zoomReset: 'Back to 100%',
     archErrors: '{n} repos skipped (error, hover for details)',
     showAll: 'Show all ({n})',
     follow: 'Auto-center', followTitle: 'On: clicking a block glides it to the middle of the view',
-    components: 'Components', uses: 'Uses', usedBy: 'Used by', builds: 'builds', showInTree: 'Show in tree',
+    components: 'Components', uses: 'Uses', usedBy: 'Used by', builds: 'builds', starts: 'starts', showInTree: 'Show in tree',
     svcUnits: 'started by',
     layer_app: 'Applications & services', layer_lib: 'Libraries & frameworks',
     layer_hal: 'Platform / HAL / user-space drivers', layer_ext: 'System & third-party libraries',
@@ -86,17 +89,18 @@ const DICT = {
     panelToggle: 'Ẩn/hiện panel',
     panelResize: 'Kéo để thay đổi chiều rộng bảng thông tin',
     langTitle: 'Ngôn ngữ giao diện',
-    fit: 'Vừa khung', expand: 'Mở thêm 1 tầng', collapse: 'Thu gọn',
+    fit: 'Vừa khung', collapse: 'Thu gọn hết', collapseNode: 'Thu gọn node',
+    collapseNodeTitle: 'Thu gọn node đang chọn và mọi nhánh bên dưới (node đang đóng: thu gọn node cha)',
     loading: 'Đang đọc manifest…',
     help: 'Bấm vào một repo trên cây để xem chi tiết.<br><br>' +
-      '• Bấm repo: thông tin nhanh và file chính<br>' +
-      '• <b>Quét sâu</b>: toàn bộ file build/config, recipe, module<br>' +
+      '• Bấm repo: thông tin nhanh, file chính và quét luôn toàn bộ file build/config (recipe, module)<br>' +
       '• Bấm file: biến, include/require/inherit đã resolve; bấm tiếp để đi sâu<br><br>' +
       'Kéo để di chuyển, cuộn để zoom, <b>/</b> để tìm.',
     status: '{n} repo, {mode}, {s}s',
     noMatch: 'Không thấy',
     noRepos: 'Không tìm thấy repo nào (không có .repo/manifest.xml và không có thư mục .git).',
-    scanning: 'Đang quét…', deepScan: 'Quét sâu', rescan: 'Quét lại',
+    scanning: 'Đang quét…', deepScan: 'File build & config', rescan: 'Quét lại',
+    rescanTitle: 'Quét lại repo này (file đã đổi từ lần quét trước)',
     copyPath: 'Copy đường dẫn', copied: 'Đã copy', reading: 'Đang đọc…',
     repoKinds: 'Loại repo', repos: 'Repo',
     keyFiles: 'File chính', keyFilesCat: 'file chính',
@@ -112,7 +116,7 @@ const DICT = {
     creating: 'Đang tạo…', buildScript: 'Build script', save: 'Lưu', saving: 'Đang lưu…', savedAt: 'Đã lưu {t}', unsaved: 'Chưa lưu',
     regenerate: 'Sinh lại', regenAsk: 'Thay script này bằng bản sinh mới? Những chỗ bạn đã sửa sẽ mất.',
     deleteScript: 'Xóa script', deleteAsk: 'Xóa {name}? Thao tác này không thể hoàn tác.', yes: 'Có', no: 'Không',
-    ok: 'OK', cancel: 'Hủy', renameScript: 'Đổi tên', scriptNamePrompt: 'Nhập tên cho script này',
+    ok: 'OK', cancel: 'Hủy', renameScript: 'Đổi tên', renameHint: 'Đổi tên file này (repomap_<tên>.sh)', scriptNamePrompt: 'Nhập tên cho script này',
     scriptNamePlaceholder: 'ví dụ: clean-cache', scriptNamePreview: 'Tên file: {name}',
     scriptNameInvalid: 'Dùng 1–64 chữ cái, số, dấu chấm, gạch dưới hoặc gạch ngang; bắt đầu bằng chữ hoặc số.',
     scriptNameReserved: 'Tên này dành riêng cho build script.',
@@ -121,7 +125,8 @@ const DICT = {
     userScriptHint: 'Viết nội dung script tại đây rồi bấm Lưu (Ctrl+S). Script chạy bằng bash trong thư mục module này.',
     readOnly: 'Chỉ đọc: {why}',
     runBuild: '▶ Chạy build', runScript: '▶ Chạy script', stopBuild: '■ Dừng', buildLog: 'Log build', scriptLog: 'Log script',
-    clearLog: 'Xoá log', stopAsk: 'Dừng build này?', stopScriptAsk: 'Dừng script này?',
+    clearLog: 'Xoá log', logErrors: '{n} lỗi', logWarnings: '{n} cảnh báo', logError1: '1 lỗi', logWarning1: '1 cảnh báo',
+    logNextErr: 'Tới lỗi tiếp theo', logNextWarn: 'Tới cảnh báo tiếp theo', stopAsk: 'Dừng build này?', stopScriptAsk: 'Dừng script này?',
     buildRunning: 'Đang chạy… {t}', buildDone: 'Xong, thành công sau {t}', buildFailed: 'Lỗi (exit {c}) sau {t}',
     buildStopped: 'Đã dừng sau {t}',
     scriptRunning: 'Đang chạy… {t}', scriptDone: 'Xong, thành công sau {t}', scriptFailed: 'Lỗi (exit {c}) sau {t}',
@@ -140,13 +145,14 @@ const DICT = {
       '• Mỗi dải là một tầng: ứng dụng/service, thư viện, nền tảng/HAL, thư viện ngoài, kernel/driver, ' +
       'board/BSP, build/công cụ<br>• Mỗi khối là một repo trong tầng đó, kèm các component tìm được<br>' +
       '• Khối được thu gọn: bấm vào để mở và vẽ liên kết (xanh = khối đó dùng gì, ' +
-      'vàng nét đứt = ai dùng nó); bấm lần nữa để đóng<br>' +
+      'vàng nét đứt = ai dùng nó; chấm = build, gạch-chấm = khởi chạy service); bấm lần nữa để đóng<br>' +
+      '• Trong panel, mỗi component ghi rõ dùng gì và được ai dùng: bấm tên để nhảy tới khối đó<br>' +
       '• Cuộn chuột để zoom, kéo để di chuyển; bấm các nút tầng để ẩn/hiện tầng',
     expandAll: 'Mở hết', collapseAll: 'Thu hết', zoomReset: 'Về 100%',
     archErrors: '{n} repo bị bỏ qua do lỗi (rê chuột để xem)',
     showAll: 'Hiện tất cả ({n})',
     follow: 'Tự căn giữa', followTitle: 'Bật: bấm vào khối thì view tự trượt để khối nằm giữa màn hình',
-    components: 'Component', uses: 'Dùng', usedBy: 'Được dùng bởi', builds: 'build', showInTree: 'Xem trên cây',
+    components: 'Component', uses: 'Dùng', usedBy: 'Được dùng bởi', builds: 'build', starts: 'khởi chạy', showInTree: 'Xem trên cây',
     svcUnits: 'khởi chạy bởi',
     layer_app: 'Ứng dụng & service', layer_lib: 'Thư viện & framework',
     layer_hal: 'Nền tảng / HAL / driver user-space', layer_ext: 'Thư viện hệ thống & bên thứ ba',

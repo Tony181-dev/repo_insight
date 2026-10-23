@@ -48,6 +48,9 @@ FILES = {
         PREFERRED_PROVIDER_virtual/kernel = "linux-acme"
         KERNEL_DEVICETREE = "acme/board.dtb"''',
     'layers/meta-acme/recipes-core/busybox/busybox_%.bbappend': 'FILESEXTRAPATHS:prepend := "${THISDIR}/files:"',
+    'layers/meta-acme/recipes-app/venc/venc_1.0.bb': '''
+        SRC_URI = "git://git.example.com/cam/venc.git;protocol=ssh"
+        DEPENDS = "foo zlib-native virtual/kernel"''',
     'layers/meta-acme/recipes-app/foo/foo_1.0.bb': '''
         SRC_URI = "git://git.example.com/acme/foo-app.git;protocol=ssh;branch=main \\
                    file://fix.patch"''',
@@ -74,9 +77,19 @@ FILES = {
         // comment { not a module
         cc_library {
             name: "libacme",
+            defaults: ["acme_defaults"],
             shared_libs: ["liblog", "libcutils"],
+            header_libs: ["libacme_headers"],
         }
-        cc_binary { name: "acmed", static_libs: ["libacme"] }''',
+        cc_defaults { name: "acme_defaults", shared_libs: ["libutils"] }
+        cc_library_headers { name: "libacme_headers" }
+        cc_binary { name: "acmed", static_libs: ["libacme"] }
+        cc_binary {
+            name: "acme-sensord",
+            relative_install_path: "hw",
+            shared_libs: ["libacme"],
+        }''',
+    'device/acme/common/init.acme.rc': 'service vendor.sensord /vendor/bin/hw/acme-sensord\n    class hal\n',
     'device/acme/common/common.mk': 'PRODUCT_BRAND := acme\n',
 
     # QNX
@@ -102,7 +115,8 @@ FILES = {
         target_link_libraries(venc PRIVATE venc_core gk7205_backend pthread PkgConfig::USB)
         add_executable(venc_test test.c)''',
     'apps/venc/main.c': 'int main(void) { return 0; }\n',
-    'apps/venc/venc.service': '[Service]\nExecStart=/usr/bin/venc -c /etc/venc.json\n',
+    'apps/venc/venc.service': '[Unit]\nWants=venc-log.service\n[Service]\nExecStart=/usr/bin/venc -c /etc/venc.json\n',
+    'apps/venc/venc-log.service': '[Service]\nExecStart=/bin/sh -c "logger venc"\n',
     'platform/hal/gk7205/configure.ac': 'AC_INIT([gk7205], [1.0])\n',
     'platform/hal/gk7205/Makefile.am': 'lib_LTLIBRARIES = libgk7205_backend.la\n'
                                        'libgk7205_backend_la_LIBADD = -lmpi\ncheck_PROGRAMS = t1\n',

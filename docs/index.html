@@ -332,7 +332,7 @@ footer { margin: 100px 0 0; border-top: 1.5px solid var(--ink); padding: 18px 0 
       <h3 id="pc">Không muốn gõ lệnh: dùng repomap trên PC (Windows)</h3>
       <p>Cần Python 3.8+ trên PC. Nhấp đúp <code>repomap-pc.cmd</code> (nằm cạnh <code>repomap.pyz</code> trong gói phát hành), hoặc chạy <code>python repomap.pyz --local</code>. Trình duyệt mở trang <code>http://127.0.0.1:6960</code> có hai tab:</p>
       <ul class="limits">
-        <li><strong>Connect:</strong> mục Configuration (chấm xanh khi đã đủ thông tin, đỏ khi chưa) gồm SSH host, user, port và port server/PC (mặc định 6969). <em>Quick setup</em> nhận lệnh ssh dán vào; <em>Save preset</em> lưu theo tên. Nút <strong>Push to server</strong> bên dưới chép <code>repomap.pyz</code> và <code>repomap.ini</code> vào <code>~/.bin</code>; trên server chạy <code>python3 ~/.bin/repomap.pyz</code> rồi chọn <code>1. Run scan</code>. Nút <strong>Connect</strong> mở tunnel trong cửa sổ ssh (gõ password ở đó nếu được hỏi) và tự mở trang repomap khi server trả lời. Nếu port trên PC đang bận, trang báo ngay.</li>
+        <li><strong>Connect:</strong> mục Configuration (chấm xanh khi đã đủ thông tin, đỏ khi chưa) gồm SSH host, user, port và port server/PC (mặc định 6969). <em>Quick setup</em> nhận lệnh ssh dán vào; <em>Save preset</em> lưu theo tên. Ô <strong>Server folder</strong> chọn nơi đặt file trên server (trống = <code>~/.bin</code>; tên thư mục = cùng cấp với <code>~/.bin</code>, tự tạo; đường dẫn = phải có sẵn). Nút <strong>Push to server</strong> chép <code>repomap.pyz</code> và <code>repomap.ini</code> vào đó. Nút <strong>Connect</strong> mở cửa sổ ssh (gõ password ở đó nếu được hỏi) vừa làm tunnel vừa chạy <code>repomap.pyz</code> trên server như chọn <code>1. Run scan</code>, rồi tự mở trang repomap khi server trả lời. Đang nối thì nút thành <strong>Cancel</strong>, đã nối thì thành <strong>Disconnect</strong>; <strong>Check connection</strong> hỏi repomap qua tunnel. Mỗi lúc chỉ một kết nối; port bận, chưa Push hay port trên server bị chiếm đều được báo rõ.</li>
         <li><strong>Saved servers:</strong> tối đa 5 server; chọn một server để điền vào Configuration.</li>
       </ul>
       <p class="sub">Trang tự tắt khoảng 3 phút sau khi bạn đóng tab; cửa sổ tunnel vẫn chạy cho tới khi bạn đóng nó.</p>
@@ -381,7 +381,7 @@ sh install.sh</pre></div></li>
         <li><strong>Android:</strong> sau <code>repo sync</code> thường có Python dựng sẵn trong <code>prebuilts/</code>. Tìm bằng <code>find prebuilts -path '*linux-x86*' -name 'python3*' -type f</code>.</li>
         <li><strong>Yocto:</strong> chạy <code>poky/scripts/install-buildtools</code> để tải bộ buildtools có python3 mới, sau đó <code>source</code> file môi trường mà nó in ra.</li>
         <li><strong>Python riêng trong thư mục home:</strong> giải nén một bản Python dựng sẵn cho Linux (dự án python-build-standalone, hoặc Miniforge) vào <code>~/opt/python</code>, rồi dùng <code>~/opt/python/bin/python3</code>.</li>
-        <li><strong>Chạy trên PC thay vì máy build:</strong> gắn source về PC bằng <code>sshfs your_build_server:your_workspace_root ~/your_workspace_root</code> rồi cài và chạy repomap trên PC. Nút Deep scan với repo lớn sẽ chậm hơn vì file phải đọc qua mạng.</li>
+        <li><strong>Chạy trên PC thay vì máy build:</strong> gắn source về PC bằng <code>sshfs your_build_server:your_workspace_root ~/your_workspace_root</code> rồi cài và chạy repomap trên PC. Bấm repo lớn (quét toàn bộ file) sẽ chậm hơn vì file phải đọc qua mạng.</li>
       </ul>
 
       <h3>Không cần giao diện</h3>
@@ -443,7 +443,7 @@ Choose [1]:</pre></div>
       </ul>
       <p>Cấu hình được lưu vào <code>~/.config/repomap/config.ini</code> nên lần sau không phải nhập lại. Workspace quét lần trước cũng được nhớ, nên chọn <code>1. Run scan</code> chỉ cần bấm Enter.</p>
       <p>Tham số dòng lệnh luôn thắng file cấu hình: <code>--port</code>, <code>--host</code>, <code>--no-browser</code>, <code>--workers</code>. Dùng <code>--run</code> để bỏ qua menu, ví dụ trong script; khi không chạy trong terminal, tool cũng tự bỏ qua menu.</p>
-      <p class="sub">Có thể sửa file bằng tay; tạo file mẫu có chú thích bằng <code>repomap --init-config</code>. Thứ tự tìm file: <code>--config</code>, biến <code>$REPOMAP_CONFIG</code>, <code>./repomap.ini</code>, <code>repomap.ini</code> nằm cạnh <code>repomap.pyz</code> (file mà nút Push to server trong tab Connect đẩy lên <code>~/.bin</code>), rồi <code>~/.config/repomap/config.ini</code>.</p>
+      <p class="sub">Có thể sửa file bằng tay; tạo file mẫu có chú thích bằng <code>repomap --init-config</code>. Thứ tự tìm file: <code>--config</code>, biến <code>$REPOMAP_CONFIG</code>, <code>./repomap.ini</code>, <code>repomap.ini</code> nằm cạnh <code>repomap.pyz</code> (file mà nút Push to server trong tab Connect đẩy lên Server folder, mặc định <code>~/.bin</code>), rồi <code>~/.config/repomap/config.ini</code>.</p>
     </div>
     <div class="cmd"><pre>[server]
 host = 127.0.0.1     <span class="c"># 0.0.0.0 mở cho cả mạng, không có mật khẩu</span>
@@ -513,7 +513,7 @@ workers = 0          <span class="c"># 0: tự chọn theo số CPU</span></pre>
           <tr><td>Bấm lại node đang chọn</td><td>Thu nhánh đó lại.</td></tr>
           <tr><td>Kéo, cuộn chuột</td><td>Di chuyển và phóng to bản vẽ.</td></tr>
           <tr><td><kbd>/</kbd></td><td>Tìm repo theo đường dẫn hoặc tên. Gõ <code>kind:qnx</code> để lọc theo loại; bấm vào chú thích màu ở góc dưới cũng ra kết quả tương tự.</td></tr>
-          <tr><td>Nút Deep scan (Quét sâu)</td><td>Trong panel của repo. Bấm lần nữa (Rescan) để quét lại sau khi bạn đổi file.</td></tr>
+          <tr><td>Quét toàn bộ file build</td><td>Tự chạy khi bấm repo. Nút Rescan trong panel của repo quét lại sau khi bạn đổi file.</td></tr>
           <tr><td>Nút Create build script</td><td>Trong panel của repo. Tạo <code>repomap_build_script.sh</code> ở gốc repo với lệnh build đoán theo loại module (Android, Yocto, kernel, QNX, CMake…). File hiện thành node màu vàng đầu nhánh; bấm vào để sửa rồi <strong>Save</strong> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) ngay trên giao diện. Giá trị không tìm được để là <code>TODO</code> ở đầu file. Chỉ sửa được khi server nghe <code>127.0.0.1</code>.</td></tr>
           <tr><td>Nút Create script</td><td>Nhập tên để tạo tối đa ba script trống cho mỗi repo. Tool tự thêm tiền tố repomap_ và đuôi .sh; có thể đổi tên sau khi tạo. Script màu xanh ngọc để phân biệt với build script màu vàng. Mỗi script thành một node trên cây; bấm node để viết, Save để lưu, Run script để chạy bằng bash trong thư mục repo và Stop để dừng. Mỗi script có log riêng.</td></tr>
           <tr><td>Nút Clear log</td><td>Trong Build log hoặc Script log. Xóa phần log đã ghi nhận; nếu script vẫn chạy, log mới tiếp tục hiện.</td></tr>

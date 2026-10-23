@@ -15,7 +15,8 @@ from . import __version__
 from .parsers import parse_file, parse_vars, src_uri_refs, vars_dict
 from .util import bb_name, git, listdir, read_text
 
-SCRIPT = 'repomap_build_script.sh'
+SCRIPT = 'repomap_build_script.sh'           # ten mac dinh; doi ten duoc (giu dong MARKER trong file)
+MARKER = '# repomap: build script'
 USER_PREFIX = 'repomap_'
 USER_NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$')
 USER_SCRIPT = re.compile(r'^repomap_[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.sh$')
@@ -35,7 +36,7 @@ def script_path(ws, repo, name=SCRIPT):
     return ws.abs(repo, name)
 
 
-def normalize_user_script_name(name):
+def normalize_user_script_name(name, build=False):
     name = str(name or '').strip()
     if name.lower().endswith('.sh'):
         name = name[:-3]
@@ -44,13 +45,38 @@ def normalize_user_script_name(name):
     if not USER_NAME.fullmatch(name) or name.endswith('.'):
         raise ValueError('Use 1–64 letters, digits, dots, underscores or hyphens; start with a letter or digit.')
     filename = USER_PREFIX + name + '.sh'
-    if filename.lower() == SCRIPT.lower():
+    if filename.lower() == SCRIPT.lower() and not build:
         raise ValueError('That name is reserved for the build script.')
     return filename
 
 
+def _marked(path):
+    head = read_text(path, 4096) or ''
+    return any(line.strip() == MARKER for line in head.splitlines()[:12])
+
+
+def _with_marker(text):
+    """Them dong MARKER (ngay sau #!) neu chua co."""
+    if any(line.strip() == MARKER for line in text.splitlines()[:12]):
+        return text
+    first, _, rest = text.partition('\n')
+    return first + '\n' + MARKER + '\n' + rest if first.startswith('#!') else MARKER + '\n' + text
+
+
+def build_script_name(ws, repo):
+    """Ten build script cua module: repomap_build_script.sh, hoac file repomap_*.sh co dong MARKER (da doi ten)."""
+    if os.path.isfile(script_path(ws, repo)):
+        return SCRIPT
+    folder = ws.abs(repo)
+    try:
+        names = sorted(os.listdir(folder), key=str.casefold)
+    except OSError:
+        return None
+    return next((n for n in names if _is_user_script(n) and _marked(os.path.join(folder, n))), None)
+
+
 def has_script(ws, repo):
-    return os.path.isfile(script_path(ws, repo))
+    return build_script_name(ws, repo) is not None
 
 
 def read_script(ws, repo, name=SCRIPT):
@@ -74,6 +100,8 @@ def save_script(ws, repo, text, name=SCRIPT):
     if len(text.encode('utf-8')) > MAX_SIZE:
         raise ValueError('script is too big (max %d KB)' % (MAX_SIZE // 1024))
     path = script_path(ws, repo, name)
+    if name != SCRIPT and name == build_script_name(ws, repo):     # build script da doi ten: giu dong MARKER
+        text = _with_marker(text)
     with open(path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(text)
     try:
@@ -85,9 +113,12 @@ def save_script(ws, repo, text, name=SCRIPT):
 
 
 def create_script(ws, repo, overwrite=False):
-    if has_script(ws, repo) and not overwrite:
-        raise ValueError('%s already exists in %s' % (SCRIPT, repo or '.'))
-    return save_script(ws, repo, generate(ws, repo))
+    """Sinh build script; Regenerate (overwrite) ghi de dung file hien tai, ke ca khi da doi ten."""
+    name = build_script_name(ws, repo)
+    if name and not overwrite:
+        raise ValueError('%s already exists in %s' % (name, repo or '.'))
+    name = name or SCRIPT
+    return save_script(ws, repo, generate(ws, repo, name), name)
 
 
 def custom_scripts(ws, repo):
@@ -96,8 +127,9 @@ def custom_scripts(ws, repo):
         names = os.listdir(folder)
     except OSError:
         return []
+    build = build_script_name(ws, repo)
     return [{'name': name, 'label': name} for name in sorted(names, key=str.casefold)
-            if _is_user_script(name) and os.path.isfile(os.path.join(folder, name))]
+            if _is_user_script(name) and name != build and os.path.isfile(os.path.join(folder, name))]
 
 
 def create_empty_script(ws, repo, name):
@@ -121,13 +153,13 @@ def create_empty_script(ws, repo, name):
     return {'repo': repo, 'name': name, 'label': name, 'text': '', 'saved': time.strftime('%H:%M:%S')}
 
 
-def rename_user_script(ws, repo, old_name, new_name):
-    if isinstance(old_name, str) and old_name.casefold() == SCRIPT.casefold():
-        raise ValueError('The build script cannot be renamed.')
+def rename_script(ws, repo, old_name, new_name):
+    """Doi ten script (ca build script: file moi giu dong MARKER de van nhan ra la build script)."""
+    build = isinstance(old_name, str) and old_name == build_script_name(ws, repo)
     old_path = script_path(ws, repo, old_name)
-    new_name = normalize_user_script_name(new_name)
+    new_name = normalize_user_script_name(new_name, build)
     if old_name.casefold() == new_name.casefold():
-        return {'repo': repo, 'oldName': old_name, 'name': old_name, 'label': old_name}
+        return {'repo': repo, 'oldName': old_name, 'name': old_name, 'label': old_name, 'build': build}
     if not os.path.isfile(old_path):
         raise ValueError('%s not found in %s' % (old_name, repo or '.'))
     existing = custom_scripts(ws, repo)
@@ -140,8 +172,12 @@ def rename_user_script(ws, repo, old_name, new_name):
         os.rename(old_path, new_path)
     except FileExistsError:
         raise ValueError('%s already exists in %s' % (new_name, repo or '.'))
+    if build and new_name != SCRIPT and not _marked(new_path):
+        text = _with_marker(read_text(new_path, MAX_SIZE) or '')
+        with open(new_path, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(text)
     exclude_from_git(ws.abs(repo), new_name)
-    return {'repo': repo, 'oldName': old_name, 'name': new_name, 'label': new_name}
+    return {'repo': repo, 'oldName': old_name, 'name': new_name, 'label': new_name, 'build': build}
 
 
 def exclude_from_git(d, name=SCRIPT):
@@ -220,8 +256,10 @@ def _android(c):
         return None
     lunch = env['lunch']
     full = 'android-device' in t
+    # *_defaults khong phai module build duoc ("m foo_defaults" loi)
     names = [m['name'] for n in ('Android.bp', 'Android.mk') if n in c['files']
-             for m in parse_file(n, read_text(os.path.join(c['dir'], n)) or '')['items']][:12]
+             for m in parse_file(n, read_text(os.path.join(c['dir'], n)) or '')['items']
+             if not m.get('type', '').endswith('_defaults')][:12]
     steps = [('Android build environment', 'cd "$WS" && source_env %s' % (env['android'] or 'build/envsetup.sh')),
              ('lunch $LUNCH_TARGET', 'lunch "$LUNCH_TARGET"')]
     if full:
@@ -352,6 +390,7 @@ def _plans(c):
 # ---------------------------------------------------------------- ghep script
 
 TOP = '''#!/usr/bin/env bash
+''' + MARKER + '''
 # Build script for {repo}  ({tags})
 # Generated by repomap {ver} on {date}: a best guess from the files repomap read.
 # Check the values in the first block. Anything set to TODO was not found: fill it in.
@@ -414,7 +453,7 @@ def _steps_text(p):
     return lines
 
 
-def generate(ws, repo):
+def generate(ws, repo, name=SCRIPT):
     p = ws.by_path[repo]
     d = ws.abs(repo)
     c = {'ws': ws, 'repo': repo, 'p': p, 'tags': p['tags'], 'dir': d, 'env': _env(ws),
@@ -422,11 +461,11 @@ def generate(ws, repo):
     plans = _plans(c)
     depth = len([x for x in repo.split('/') if x not in ('', '.')])
     fmt = {'repo': repo or '.', 'tags': ', '.join(p['tags']) or p['kind'], 'ver': __version__,
-           'date': time.strftime('%Y-%m-%d'), 'name': SCRIPT, 'up': '/'.join(['..'] * depth) or '.'}
+           'date': time.strftime('%Y-%m-%d'), 'name': name, 'up': '/'.join(['..'] * depth) or '.'}
     out, helpers = TOP.format(**fmt).splitlines(), HELPERS.format(**fmt).splitlines()
     if not plans:
         out += helpers + ['', '# ---- TODO: repomap did not recognise a build system here. Add your build commands.',
-                          'cd "$MODULE"', 'step "build"', 'echo "Nothing to build yet: edit %s" >&2' % SCRIPT, 'exit 2']
+                          'cd "$MODULE"', 'step "build"', 'echo "Nothing to build yet: edit %s" >&2' % name, 'exit 2']
         return '\n'.join(out) + '\n'
     out += _vars_text(plans[0]) + helpers + _steps_text(plans[0])
     alts = [(q['title'], ['%s   # %s' % (cmd, desc) for desc, cmd in q['steps']]) for q in plans[1:]]

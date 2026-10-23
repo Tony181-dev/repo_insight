@@ -155,6 +155,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outli
 .alk.out { stroke: #3fb950; }
 .alk.in { stroke: #d29922; stroke-dasharray: 6 4; }
 .alk.build { stroke-dasharray: 2 4; }
+.alk.start { stroke-dasharray: 10 3 2 3; }
 .ah.out { fill: #3fb950; }
 .ah.in { fill: #d29922; }
 
@@ -201,6 +202,7 @@ button[hidden] { display: none; }
 .bd-st.err { color: #ff7b72; }
 .bd-st.lost { color: #e3b341; }
 .log-hd { display: flex; align-items: center; gap: 8px; }
+.log-hd[hidden] { display: none; }
 .log-hd h4 { flex: 1; margin: 18px 0 6px; }
 .clear-log { padding: 4px 8px; font-size: 11px; }
 .icon-btn { width: 30px; height: 30px; flex: none; display: inline-grid; place-items: center; padding: 0; }
@@ -223,7 +225,22 @@ button[hidden] { display: none; }
 .confirm-yes:hover { background: #f85149; border-color: #f85149; }
 .bd-log { margin: 0; height: calc(55vh - 110px); min-height: 200px; overflow: auto; background: #010409;
   border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 11.5px/1.45 var(--mono);
-  white-space: pre-wrap; word-break: break-all; color: #c9d1d9; }
+  white-space: pre-wrap; word-break: break-all; color: #c9d1d9; position: relative; }
+/* log: to mau theo dong (build.js logClass) */
+.bd-log .lg-err { color: #ff8b82; background: #f8514917; box-shadow: inset 3px 0 0 #f85149; }
+.bd-log .lg-warn { color: #e3b341; background: #d2992212; box-shadow: inset 3px 0 0 #d29922; }
+.bd-log .lg-ok { color: #56d364; font-weight: 600; }
+.bd-log .lg-step { color: #79c0ff; font-weight: 600; }
+.bd-log .lg-meta { color: #7d8590; font-style: italic; }
+.bd-log span[class] { padding-left: 6px; }
+.bd-log .lg-flash { animation: lg-flash 1.2s ease-out; }
+@keyframes lg-flash { 0% { background: #f0b42966; } }
+.lg-cnt { display: flex; gap: 6px; margin-top: 12px; }
+.lg-cnt:empty { display: none; }
+.lg-chip { padding: 2px 8px; font: 600 11px var(--mono); border-radius: 999px; }
+.lg-chip.err { color: #ff7b72; border-color: #f8514980; background: #f851491a; }
+.lg-chip.warn { color: #e3b341; border-color: #d2992280; background: #d299221a; }
+.lg-chip:hover { filter: brightness(1.25); }
 .nd.script.running .halo { animation: bd-pulse 1.2s ease-in-out infinite; stroke: #58a6ff; stroke-dasharray: none; }
 @keyframes bd-pulse { 50% { opacity: .15; } }
 h4 { margin: 18px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .8px; color: var(--mute);
@@ -259,6 +276,32 @@ input.flt { width: 100%; background: var(--bg); color: var(--fg); border: 1px so
 .vcode .vc-win { position: absolute; left: 0; top: 0; min-width: 100%; padding: 0; }
 .vcode .vc-win > div { height: 18px; line-height: 18px; white-space: pre; padding-right: 10px; }
 .vcode b { width: calc(var(--gw, 4ch) + 16px); }
+
+/* editor script co to mau (editor.js): textarea trong suot nam tren lop to mau + cot so dong */
+.sc-wrap { position: relative; --gut: calc(var(--gw, 3ch) + 18px); }
+.sc-wrap .sc-ed { display: block; position: relative; z-index: 1; background: transparent; color: transparent;
+  caret-color: #f0f6fc; padding-left: calc(var(--gut) + 12px); }
+.sc-wrap .sc-ed::selection { background: #3b5070; color: transparent; }
+.sc-hl, .sc-gut { position: absolute; top: 0; bottom: 0; margin: 0; overflow: hidden; pointer-events: none;
+  font: 12.5px/1.5 var(--mono); tab-size: 4; white-space: pre; border: 1px solid transparent; }
+.sc-hl { left: 0; right: 0; padding: 10px 12px 10px calc(var(--gut) + 12px); color: #e6edf3;
+  background: #0b1016; border-radius: 8px; }
+.sc-gut { left: 0; z-index: 2; width: var(--gut); padding: 10px 8px 10px 0; text-align: right; color: #484f58;
+  background: #0d131b; border-right-color: #1f2630; border-radius: 8px 0 0 8px; }
+/* theme editor bash (kieu One Dark): tu khoa tim, lenh xanh, chuoi xanh la, bien do cam, ham xanh duong dam */
+.sc-hl .tk-sb { color: #7f848e; font-style: italic; font-weight: 600; }
+.sc-hl .tk-cm { color: #7f848e; }
+.sc-hl .tk-kw { color: #c678dd; font-weight: 600; }
+.sc-hl .tk-st { color: #98c379; }
+.sc-hl .tk-va { color: #e06c75; }
+.sc-hl .tk-nu { color: #d19a66; }
+.tk-bi { color: #56b6c2; }
+.tk-cmd { color: #61afef; }
+.tk-fn { color: #61afef; font-weight: 700; }
+.tk-as { color: #e5c07b; }
+.tk-op { color: #d19a66; }
+.tk-pu { color: #c678dd; }
+.tk-sb { color: #6e7681; font-style: italic; }
 
 /* to mau code (highlight.js) */
 .tk-cm { color: #6e7781; font-style: italic; }
@@ -340,3 +383,11 @@ input.flt { width: 100%; background: var(--bg); color: var(--fg); border: 1px so
 .src-code .ref { cursor: pointer; }
 .src-code .ref:hover { background: #1c2b3d; }
 .src-code .ref b { color: var(--acc); }
+
+/* block view: lien ket cap component trong panel (bam -> toi khoi ben kia) */
+.clinks { display: flex; flex-wrap: wrap; gap: 3px 4px; margin-top: 3px; align-items: baseline; }
+.clinks > span { color: var(--mute); font-size: 11px; margin-right: 2px; }
+.clinks a { font: 11px var(--mono); padding: 0 6px; border-radius: 4px; border: 1px solid var(--line); cursor: pointer;
+  color: var(--fg); border-left: 3px solid var(--lc, var(--line)); }
+.clinks a:hover { border-color: var(--acc); color: var(--acc); }
+.clinks a.ext { border-style: dashed; color: var(--mute); }

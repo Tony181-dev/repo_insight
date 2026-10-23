@@ -1,4 +1,5 @@
 import contextlib
+import getpass
 import io
 import json
 import os
@@ -21,7 +22,7 @@ from repomap.cli import apply_overrides, interactive, parse_args, resolve_settin
 from repomap.menu import run_menu  # noqa: E402
 from repomap.settings import (Settings, detect_ssh_port, load_settings, parse_ssh_command,  # noqa: E402
                               parse_sshd_ports, save_settings, write_template)
-from repomap import local  # noqa: E402
+from repomap import cli, local  # noqa: E402
 from repomap import builds, buildscript, guard  # noqa: E402
 from repomap.arch import box_detail, build_arch, slim_arch  # noqa: E402
 from repomap.deepscan import deep_scan  # noqa: E402
@@ -208,7 +209,7 @@ class WorkspaceTest(unittest.TestCase):
         a = build_arch(self.ws)
         box = {b['id']: b for b in a['boxes']}
         names = lambda bid: {c['name'] for c in box[bid]['comps']}  # noqa: E731
-        self.assertEqual(names('apps/venc#app'), {'venc'})                   # venc_test bo qua
+        self.assertEqual(names('apps/venc#app'), {'venc', 'venc-log'})      # venc_test bo qua
         self.assertEqual(box['apps/venc#app']['comps'][0]['svc'], ['venc'])  # venc.service
         self.assertIn('venc_core', names('apps/venc#lib'))
         self.assertIn('libgk7205_backend', names('platform/hal/gk7205#hal'))  # thu muc hal/ -> tang HAL
@@ -218,21 +219,58 @@ class WorkspaceTest(unittest.TestCase):
         self.assertEqual(names('device/acme/board#app'), {'acmed'})
         self.assertIn('libacme', names('device/acme/board#lib'))
         self.assertIn('acme-board', names('layers/meta-acme#board'))
-        self.assertTrue({'pyapp', 'web', 'db'} <= names('tools/extra#app'))
+        self.assertTrue({'pyapp', 'web'} <= names('tools/extra#app'))
+        self.assertEqual(names('tools/extra#ext'), {'db'})                    # chi co image: service ben thu ba
         self.assertIn('GitLab CI', names('tools/extra#build'))
         self.assertTrue({'libusb-1.0', 'libmpi'} <= names('ext#c'))
-        self.assertTrue({'liblog', 'libcutils'} <= names('ext#android'))
+        self.assertTrue({'liblog', 'libcutils', 'libutils'} <= names('ext#android'))   # libutils: tu cc_defaults
+        self.assertNotIn('libacme_headers', names('ext#android'))             # header lib trong workspace
+        self.assertIn('libacme_headers', names('device/acme/board#lib'))
+        self.assertEqual(names('device/acme/board#hal'), {'acme-sensord'})    # relative_install_path: "hw"
+        self.assertNotIn('acme_defaults', names('device/acme/board#lib'))
         edges = {(x, y, k) for x, y, _, k in a['edges']}
         self.assertIn(('apps/venc#app', 'platform/hal/gk7205#hal', 'use'), edges)
         self.assertIn(('apps/venc#app', 'apps/venc#lib', 'use'), edges)
         self.assertIn(('device/acme/board#app', 'device/acme/board#lib', 'use'), edges)
+        self.assertIn(('device/acme/board#hal', 'device/acme/board#lib', 'use'), edges)
+        self.assertIn(('device/acme/common#board', 'device/acme/board#hal', 'start'), edges)   # .rc o repo khac
         self.assertIn(('layers/meta-acme#build', 'src/foo-app#app', 'build'), edges)   # SRC_URI -> repo
+        self.assertIn(('apps/venc#app', 'src/foo-app#app', 'use'), edges)    # recipe venc DEPENDS recipe foo
         self.assertEqual(a['errors'], [])
         slim = slim_arch(a)                                       # giao dien: ban gon + chi tiet khi bam khoi
         venc = next(b for b in slim['boxes'] if b['id'] == 'apps/venc#app')
-        self.assertEqual(venc['comps'], [{'name': 'venc', 'type': 'exe', 'svc': 1}])
-        self.assertEqual(venc['n'], {'svc': 1})
-        self.assertEqual(box_detail(a, 'apps/venc#app')['comps'][0]['f'], 'CMakeLists.txt')
+        self.assertEqual(venc['comps'][0], {'name': 'venc', 'type': 'exe', 'svc': 1})
+        self.assertEqual(venc['n'], {'svc': 2})                               # venc + venc-log.service
+        detail = {c['name']: c for c in box_detail(a, 'apps/venc#app')['comps']}
+        self.assertEqual(detail['venc']['f'], 'CMakeLists.txt')
+        self.assertIn(['venc-log', 'apps/venc#app'], detail['venc']['uses'])   # Wants=venc-log.service
+        self.assertIn(['libgk7205_backend', 'platform/hal/gk7205#hal'], detail['venc']['uses'])
+        sensord = box_detail(a, 'device/acme/board#hal')['comps'][0]
+        self.assertEqual(sensord['svc'], ['vendor.sensord'])
+        lib = next(c for c in box_detail(a, 'device/acme/board#lib')['comps'] if c['name'] == 'libacme')
+        self.assertIn(['acme-sensord', 'device/acme/board#hal'], lib['usedBy'])
+
+    def test_arch_layers_by_ecosystem(self):
+        """backend/, drivers/ chi goi y tang HAL voi code native; ten phu thuoc chi khop trong cung he sinh thai."""
+        with tempfile.TemporaryDirectory() as tmp:
+            make_workspace(tmp)
+            files = {'tools/extra/backend/main.py': 'print(1)\n',
+                     'tools/extra/backend/requirements.txt': 'Foo_Bar\n',
+                     'tools/extra/backend/pyproject.toml': '[project]\nname = "web-backend"\n'
+                                                           'dependencies = ["foo.bar", "venc"]\n'
+                                                           '[project.scripts]\nweb-backend = "x:y"\n',
+                     'device/acme/common/foo-bar/pyproject.toml': '[project]\nname = "Foo_Bar"\n'}
+            for rel, text in files.items():
+                os.makedirs(os.path.dirname(os.path.join(tmp, rel)), exist_ok=True)
+                with open(os.path.join(tmp, rel), 'w') as f:
+                    f.write(text)
+            a = build_arch(Workspace(tmp, workers=2).load(), refresh=True)
+            comps = {(b['id'], c['name']): c for b in a['boxes'] for c in box_detail(a, b['id'])['comps']}
+            self.assertIn(('tools/extra#app', 'web-backend'), comps)            # khong bi day xuong HAL
+            uses = comps[('tools/extra#app', 'web-backend')]['uses']
+            self.assertIn(['Foo_Bar', 'device/acme/common#lib'], uses)       # foo.bar = Foo_Bar (PEP 503)
+            self.assertNotIn(['venc', 'apps/venc#app'], uses)                   # goi Python "venc" != binary C venc
+            self.assertIn(['venc', 'ext#py'], uses)
 
     def test_arch_cache(self):
         """Repo chua doi HEAD / index: lan sau dung lai ket qua tren dia; Rescan hoac doi commit: quet lai."""
@@ -459,7 +497,7 @@ class MenuTest(unittest.TestCase):
     def test_quick_setup_cancel_and_busy_port(self):
         with socket.socket() as busy:
             busy.bind(('127.0.0.1', 0))
-            busy.listen(1)
+            busy.listen(16)
             port = busy.getsockname()[1]
             result, s, out = self.run_menu(['2', str(port), 'h', 'u', '22', '', '3', '', '0'])
         text = '\n'.join(out)
@@ -507,7 +545,7 @@ class BuildScriptTest(unittest.TestCase):
         android = self.gen('device/acme/board')
         self.assertIn('LUNCH_TARGET="acme-userdebug"', android)              # tu COMMON_LUNCH_CHOICES
         self.assertIn('lunch "$LUNCH_TARGET"', android)
-        self.assertIn('# m libacme acmed', android)                          # module trong Android.bp: cach khac
+        self.assertIn('# m libacme libacme_headers acmed acme-sensord', android)  # module trong Android.bp: cach khac
         yocto_src = self.gen('src/foo-app')
         self.assertIn('RECIPES="foo"', yocto_src)                            # recipe co SRC_URI tro vao repo nay
         self.assertIn('bitbake $RECIPES', yocto_src)
@@ -558,6 +596,28 @@ class BuildScriptTest(unittest.TestCase):
         if has_git:
             with open(os.path.join(d, '.git', 'info', 'exclude')) as f:
                 self.assertEqual(f.read().count('/repomap_build_script.sh'), 1)     # them 1 lan
+
+    def test_rename_build_script(self):
+        """Build script doi ten duoc: file moi van la build script (dong MARKER), khong tinh vao script rieng."""
+        repo, ws = 'apps/venc', self.ws
+        buildscript.create_script(ws, repo)
+        runs = builds.Builds(ws)
+        r = runs.rename_script(repo, buildscript.SCRIPT, 'build_venc')
+        self.assertEqual((r['name'], r['build']), ('repomap_build_venc.sh', True))
+        self.assertEqual(buildscript.build_script_name(ws, repo), 'repomap_build_venc.sh')
+        self.assertEqual(buildscript.custom_scripts(ws, repo), [])
+        self.assertIn('cmake', buildscript.create_script(ws, repo, overwrite=True)['text'])   # Regenerate: cung file
+        self.assertFalse(os.path.exists(buildscript.script_path(ws, repo)))
+        buildscript.save_script(ws, repo, '#!/bin/sh\necho old\n', 'repomap_build_venc.sh')       # Save giu dong MARKER
+        buildscript.rename_script(ws, repo, 'repomap_build_venc.sh', 'repomap_build_script.sh')
+        buildscript.rename_script(ws, repo, buildscript.SCRIPT, 'b2')
+        self.assertEqual(buildscript.build_script_name(ws, repo), 'repomap_b2.sh')
+        self.assertEqual(buildscript.read_script(ws, repo, 'repomap_b2.sh')['text'],
+                         '#!/bin/sh\n' + buildscript.MARKER + '\necho old\n')
+        buildscript.create_empty_script(ws, repo, 'clean')
+        self.assertEqual([s['name'] for s in buildscript.custom_scripts(ws, repo)], ['repomap_clean.sh'])
+        with self.assertRaisesRegex(ValueError, 'reserved'):
+            buildscript.rename_script(ws, repo, 'repomap_clean.sh', 'build_script')
             st = subprocess.run(['git', 'status', '--porcelain'], cwd=d, capture_output=True, text=True).stdout
             self.assertNotIn('repomap_build_script.sh', st)
 
@@ -750,19 +810,42 @@ class LocalTest(unittest.TestCase):
 
     def test_check_cfg(self):
         self.assertEqual(local.check_cfg(self.CFG),
-                         {'host': 'h.vbee.lge.com', 'user': 'worker', 'port': 56614, 'srv': 6969})
+                         {'host': 'h.vbee.lge.com', 'user': 'worker', 'port': 56614, 'srv': 6969, 'dir': ''})
         for bad, word in (({'host': ''}, 'host'), ({'user': 'a b'}, 'user'), ({'port': 'x'}, 'SSH port'),
-                          ({'srv': '70000'}, 'local port'), ({'host': 'a&calc'}, 'host')):
+                          ({'srv': '70000'}, 'local port'), ({'host': 'a&calc'}, 'host'),
+                          ({'dir': 'a b'}, 'Server folder'), ({'dir': 'x;rm'}, 'Server folder'),
+                          ({'dir': '../etc'}, 'Server folder'), ({'dir': '-x'}, 'Server folder')):
             with self.assertRaisesRegex(ValueError, word):
                 local.check_cfg(dict(self.CFG, **bad))
+
+    def test_remote_dir(self):
+        """Trong = ~/.bin; ten thu muc = canh ~/.bin (tao neu chua co); duong dan = phai co san."""
+        rd = local.remote_dir
+        self.assertEqual(rd(''), {'rel': '.bin', 'path': False, 'show': '~/.bin'})
+        self.assertEqual(rd(' tools/ '), {'rel': 'tools', 'path': False, 'show': '~/tools'})
+        self.assertEqual(rd('/opt/repomap/'), {'rel': '/opt/repomap', 'path': True, 'show': '/opt/repomap'})
+        self.assertEqual(rd('~/work/bin'), {'rel': 'work/bin', 'path': True, 'show': '~/work/bin'})
+        self.assertEqual(rd('work/bin'), {'rel': 'work/bin', 'path': True, 'show': '~/work/bin'})
+        self.assertEqual(rd('~')['rel'], '.')
+        for bad in ('~root/x', '.', 'a/../b', 'x y', '$(id)'):
+            with self.assertRaises(ValueError):
+                rd(bad)
 
     def test_commands_and_server_ini(self):
         cfg = local.check_cfg(self.CFG)
         self.assertEqual(local.tunnel_argv(cfg)[:4], ['ssh', '-N', '-L', '6969:127.0.0.1:6969'])
         self.assertEqual(local.tunnel_argv(cfg)[-1], 'worker@h.vbee.lge.com')
+        run = local.tunnel_argv(cfg, local.remote_dir('tools'))        # Connect: tunnel + chay repomap.pyz luon
+        self.assertEqual(run[:4], ['ssh', '-t', '-L', '6969:127.0.0.1:6969'])
+        self.assertEqual(run[-2:], ['worker@h.vbee.lge.com', 'test -f tools/repomap.pyz || exit 3; '
+                                    'exec python3 tools/repomap.pyz --connect --port 6969'])
+        self.assertIn('"test -f tools/repomap.pyz || exit 3; exec', local.quote(run))
         argv = local.deploy_argv(cfg, '/tmp/x/.bin')
         self.assertEqual(argv[:4], ['scp', '-r', '-P', '56614'])
         self.assertEqual(argv[-2:], ['/tmp/x/.bin', 'worker@h.vbee.lge.com:'])
+        argv = local.deploy_argv(cfg, ['/t/repomap.pyz', '/t/repomap.ini'], '/opt/x')   # duong dan: phai co san
+        self.assertEqual(argv, ['scp', '-P', '56614', '-o', 'ConnectTimeout=15', '/t/repomap.pyz', '/t/repomap.ini',
+                                'worker@h.vbee.lge.com:/opt/x/'])
         path = os.path.join(self.tmp.name, 'repomap.ini')
         with open(path, 'w', encoding='utf-8') as f:
             f.write(local.server_ini(cfg))
@@ -788,10 +871,57 @@ class LocalTest(unittest.TestCase):
     def test_connect_refuses_busy_port(self):
         with socket.socket() as busy:
             busy.bind(('127.0.0.1', 0))
-            busy.listen(1)
+            busy.listen(16)
             port = busy.getsockname()[1]
             with self.assertRaisesRegex(ValueError, 'Port %d on this PC is already in use' % port):
                 local.Jobs().connect(local.check_cfg(dict(self.CFG, srv=port)), open_browser=False)
+            self.assertEqual(local.Jobs().check(port)['why'], 'noreply')         # port co nguoi nghe, khong phai repomap
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as e:
+                cli.attach_running(port)                                   # tren server: --connect bao loi, ma 4
+            self.assertEqual(e.exception.code, local.EXIT_PORT_TAKEN)
+        self.assertFalse(cli.attach_running(port))                         # port trong: chay repomap moi
+
+    def test_connect_once_disconnect_and_check(self):
+        """Dang ket noi thi Connect lan nua bi tu choi (khong mo 2 cua so ssh); Disconnect dong tunnel."""
+        class Alive:
+            pid = 0
+
+            def poll(self):
+                return None
+        jobs = local.Jobs()
+        jobs.tunnel_proc = Alive()
+        jobs.tunnel = {'state': 'up', 'host': 'h.vbee.lge.com'}
+        with self.assertRaisesRegex(ValueError, 'Already connected'):
+            jobs.connect(local.check_cfg(self.CFG), open_browser=False)
+        killed = []
+        orig, local.kill_tree = local.kill_tree, killed.append
+        try:
+            self.assertEqual(jobs.disconnect(), {'ok': True, 'was': 'up'})
+        finally:
+            local.kill_tree = orig
+        self.assertEqual(len(killed), 1)
+        self.assertEqual((jobs.tunnel_proc, jobs.tunnel['state']), (None, 'closed'))
+        with socket.socket() as s:
+            s.bind(('127.0.0.1', 0))
+            free = s.getsockname()[1]
+        self.assertEqual(jobs.check(free), {'ok': False, 'why': 'noport', 'state': 'closed'})
+
+    def test_repomap_answers_through_tunnel(self):
+        """Check connection / cli --connect: /api/ping cua server repomap (user, workspace) qua port tunnel."""
+        with tempfile.TemporaryDirectory() as tmp:
+            ws = Workspace(make_workspace(tmp), workers=2).load()
+            srv = start_server(ws, port=0, tries=1)
+            port = srv.server_address[1]
+            threading.Thread(target=srv.serve_forever, daemon=True).start()
+            try:
+                info = local.Jobs().check(port)
+                self.assertTrue(info['ok'])
+                self.assertEqual((info['app'], info['root'], info['running']), ('repomap', ws.root, 0))
+                self.assertEqual(info['user'], getpass.getuser())
+                self.assertEqual(cli.ping(port)['pid'], os.getpid())
+            finally:
+                srv.shutdown()
+                srv.server_close()
 
     def test_http_only_from_own_page(self):
         from urllib.error import HTTPError

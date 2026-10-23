@@ -163,7 +163,7 @@ function drawLinks() {
       const m = (x2 - x1) / 2;
       d = `M${x1},${y1}C${x1 + m},${y1} ${x2 - m},${y2} ${x2},${y2}`;
     }
-    h += `<path class="alk ${cls}${k === 'build' ? ' build' : ''}" d="${d}" marker-end="url(#ah-${cls})"/>`;
+    h += `<path class="alk ${cls}${k === 'use' ? '' : ' ' + k}" d="${d}" marker-end="url(#ah-${cls})"/>`;
   };
   const me = pos(sel);
   const ends = list => (list || []).map(([id, , k]) => [pos(id), k]).filter(x => x[0])
@@ -263,7 +263,19 @@ function linkList(list) {
   return `<div class="ls">${list.map(([id, n, k]) => {
     const b = byId.get(id);
     return `<a data-a="abox" data-id="${esc(id)}"><span class="dot" style="background:${LAYER_COLOR[b.layer]}"></span>
-      ${esc(tl(b.label))} <small>${esc(layerName(b.layer))}${k === 'build' ? ' · ' + t('builds') : ''} · ${n}</small></a>`;
+      ${esc(tl(b.label))} <small>${esc(layerName(b.layer))}${k === 'use' ? '' : ' · ' + t(k === 'build' ? 'builds' : 'starts')} · ${n}</small></a>`;
+  }).join('')}</div>`;
+}
+
+// lien ket cap component: [ten, id khoi] -> chip bam duoc (toi khoi ben kia), cung khoi thi chi hien ten
+function compLinks(label, list, self) {
+  if (!list?.length) return '';
+  return `<div class="clinks"><span>${esc(label)}:</span>${list.map(([name, id]) => {
+    const b = byId.get(id);
+    if (!b || id === self) return `<a class="here" title="${esc(name)}">${esc(name)}</a>`;
+    const where = b.repo ? `${b.repo} · ${layerName(b.layer)}` : tl(b.label);
+    return `<a data-a="abox" data-id="${esc(id)}" class="${b.layer === 'ext' && !b.repo ? 'ext' : ''}"
+      style="--lc:${LAYER_COLOR[b.layer]}" title="${esc(where)}">${esc(name)}</a>`;
   }).join('')}</div>`;
 }
 
@@ -279,8 +291,9 @@ function panelHtml(b, d) {
   else if (d.error) h += `<div class="err">${esc(d.error)}</div>`;
   else if (d.comps.length > 10) h += `<input class="flt" placeholder="${esc(t('filter'))}" data-flt="#acomps tr">`;
   if (d && !d.error) h += `<table class="kv" id="acomps">${d.comps.map(c => {
-    const extra = [c.note, c.svc && `${t('svcUnits')}: ${c.svc.join(', ')}`, c.uses && `${t('uses')}: ${c.uses.join(', ')}`]
-      .filter(Boolean).map(x => `<div class="muted">${esc(x)}</div>`).join('');
+    const extra = [c.note, c.svc && `${t('svcUnits')}: ${c.svc.join(', ')}`]
+      .filter(Boolean).map(x => `<div class="muted">${esc(x)}</div>`).join('')
+      + compLinks(t('uses'), c.uses, b.id) + compLinks(t('usedBy'), c.usedBy, b.id);
     const file = c.f ? `<a class="lnk" data-a="src" data-repo="${esc(b.repo)}" data-base="${esc(parent(c.f))}" data-f="${esc(c.f)}"
       title="${esc(c.f)}">${esc(c.f.split('/').slice(-2).join('/'))}${c.n ? ':' + c.n : ''}</a>` : '';
     return `<tr><td>${ICON[ctype(c)] || '•'} ${esc(typeName(c))}</td><td><b>${esc(c.name)}</b>${extra}${file}</td></tr>`;

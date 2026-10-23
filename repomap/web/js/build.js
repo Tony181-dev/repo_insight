@@ -3,7 +3,7 @@
 // Panel dang mo script: poll moi giay, noi them log vao khung; mat ket noi thi thu lai, noi lai doc tiep tu `next`.
 // Ngoai ra poll /api/builds moi vai giay khi con build dang chay de to sang node script trong cay.
 
-import { $, api, post, store, SCRIPT } from './util.js';
+import { $, esc, api, post, store, SCRIPT } from './util.js';
 import { t } from './i18n.js';
 
 const KEEP = 1 << 20;                   // giu toi da 1 MB log cuoi trong trinh duyet
@@ -47,6 +47,88 @@ export function statusText(bd, customScript = false) {
     failed: ['err', t('buildFailed', { c: bd.code, t: time })],
     stopped: ['err', t('buildStopped', { t: time })],
   }[bd.state] || ['', bd.state];
+}
+
+// ---------------------------------------------------------------- to mau log theo dong
+// err: loi (gcc/clang "error:", make "*** ... Error 2", bitbake "ERROR:", Python Traceback, lenh khong tim thay...)
+// warn: canh bao; ok: thanh cong / xong; step: buoc dang chay (==> cua build script, [ 42%] cmake, [12/300] ninja,
+// NOTE: bitbake, + cua set -x); meta: dong repomap tu ghi.  "0 errors" / "no warnings" la tin tot, khong phai loi.
+
+const LOC = String.raw`^(?:\S+?:\d+(?::\d+)?:\s*)?`;
+const RE = {
+  err: new RegExp(LOC + String.raw`(?:fatal error|error)\b|^ERROR:|^E:\s|^FAILED\b|^FAIL\b|\*\*\* |\bError \d+\b|` +
+    String.raw`^Traceback \(|\b(?:error|errors|failed|failure|fatal|panic|exception|segmentation fault|` +
+    String.raw`undefined reference|no such file or directory|command not found|permission denied|cannot|` +
+    String.raw`could not|unable to|not found)\b`, 'i'),
+  warn: new RegExp(LOC + String.raw`warning\b|^WARNING:|^W:\s|^WARN\b|\b(?:warning|warnings|deprecated)\b`, 'i'),
+  good: /\b(?:0|no) (?:errors?|failures?|warnings?)\b/i,
+  ok: /\b(?:success|successful|successfully|succeeded|passed|completed?|finished|built target|build succeeded)\b|^==> done\b|\bdone\.?$/i,
+  step: /^(?:==>|>>>|-- |#{2,} |NOTE:|\[\s*\d+%\]|\[\d+\/\d+\]|\+ )/,
+};
+
+export function logClass(line) {
+  const s = line.trim();
+  if (!s) return '';
+  const m = /^\[repomap\] (\w+)/.exec(s);
+  if (m) return m[1] === 'done' ? 'ok' : m[1] === 'stopped' ? 'warn' : 'err';
+  if (s.startsWith('$ bash ')) return 'meta';
+  if (RE.good.test(s)) {                                     // tong ket kieu "0 errors, 2 warnings"
+    if (/[1-9]\d* (?:errors?|failures?)\b/i.test(s)) return 'err';
+    return /[1-9]\d* warnings?\b/i.test(s) ? 'warn' : 'ok';
+  }
+  if (RE.err.test(s) && !/^warning\b/i.test(s.replace(new RegExp(LOC), ''))) return 'err';
+  if (RE.warn.test(s)) return 'warn';
+  if (RE.ok.test(s)) return 'ok';
+  return RE.step.test(s) ? 'step' : '';
+}
+
+// moi dong 1 <span> (giu ca "\n" ben trong) de noi them log va dem loi / canh bao bang DOM
+export const logHtml = text => (text ? text.split(/(?<=\n)/) : []).map(line => {
+  const c = logClass(line);
+  return c ? `<span class="lg-${c}">${esc(line)}</span>` : `<span>${esc(line)}</span>`;
+}).join('');
+
+function appendLog(log, chunk) {
+  const last = log.lastElementChild;
+  if (last && !last.textContent.endsWith('\n')) {          // dong dang do o lan doc truoc: ghep roi to mau lai
+    chunk = last.textContent + chunk;
+    last.remove();
+  }
+  log.insertAdjacentHTML('beforeend', logHtml(chunk));
+}
+
+const chips = (e, w) => (e ? `<button class="lg-chip err" data-a="log-jump" data-k="err" title="${esc(t('logNextErr'))}">`
+  + `✖ ${t(e === 1 ? 'logError1' : 'logErrors', { n: e })}</button>` : '')
+  + (w ? `<button class="lg-chip warn" data-a="log-jump" data-k="warn" title="${esc(t('logNextWarn'))}">`
+  + `⚠ ${t(w === 1 ? 'logWarning1' : 'logWarnings', { n: w })}</button>` : '');
+
+export function countsHtml(text) {
+  let e = 0, w = 0;
+  for (const line of (text || '').split('\n')) {
+    const c = logClass(line);
+    if (c === 'err') e++;
+    else if (c === 'warn') w++;
+  }
+  return chips(e, w);
+}
+
+function updateCounts(log) {
+  const box = $('#bd-cnt');
+  if (box) box.innerHTML = chips(log.querySelectorAll('.lg-err').length, log.querySelectorAll('.lg-warn').length);
+}
+
+// bam so loi / canh bao: cuon toi dong tiep theo loai do (het thi quay lai dong dau), nhay sang de de thay
+export function jumpLog(kind) {
+  const log = $('#bd-log');
+  if (!log) return;
+  const lines = [...log.querySelectorAll('.lg-' + kind)];
+  if (!lines.length) return;
+  const top = log.scrollTop + 8;
+  const next = lines.find(x => x.offsetTop > top) || lines[0];         // .bd-log: position relative
+  log.scrollTop = next.offsetTop - 8;
+  next.classList.remove('lg-flash');
+  void next.offsetWidth;                                   // chay lai hieu ung neu bam lien tiep
+  next.classList.add('lg-flash');
 }
 
 // trang thai moi module (de to sang node trong cay); poll thua khi khong co build nao chay
@@ -113,8 +195,9 @@ function render(n, chunk, statusOnly = false) {
   $('#bd-hd')?.toggleAttribute('hidden', !n.bd.text);
   $('#sc-ed')?.classList.toggle('with-log', !!n.bd.text);        // co log: editor thu nho, log hien ngay ben duoi
   const atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-  if (chunk === null || log.textContent.length > KEEP * 1.2) log.textContent = n.bd.text;
-  else if (chunk) log.append(chunk);
+  if (chunk === null || log.textContent.length > KEEP * 1.2) log.innerHTML = logHtml(n.bd.text);
+  else if (chunk) appendLog(log, chunk);
+  updateCounts(log);
   if (atEnd || chunk === null) log.scrollTop = log.scrollHeight;
 }
 

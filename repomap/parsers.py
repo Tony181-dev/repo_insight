@@ -166,7 +166,9 @@ def _line_of(text, pos):
 
 
 def bp_modules(text):
-    """Android.bp: [{type, name, line, deps}]."""
+    """Android.bp: [{type, name, line, deps, defaults, hw}].
+    defaults: cac module *_defaults duoc ke thua (deps cua chung cung la deps cua module nay);
+    hw: cai vao .../bin/hw (relative_install_path "hw") hoac co vintf_fragments -> HAL service / HAL impl."""
     t = re.sub(r'//[^\n]*|/\*.*?\*/', lambda m: re.sub(r'[^\n]', ' ', m.group()), text, flags=re.S)
     mods, pos = [], 0
     for m in re.finditer(r'^(\w+)\s*\{', t, re.M):
@@ -184,8 +186,11 @@ def bp_modules(text):
         for d in re.finditer(r'\b(?:shared_libs|static_libs|header_libs|whole_static_libs|libs|required|deps|'
                              r'runtime_libs|defaults)\s*:\s*\[([^\]]*)\]', body):
             deps.update(re.findall(r'"([^"]+)"', d.group(1)))
+        dm = re.search(r'\bdefaults\s*:\s*\[([^\]]*)\]', body)
+        hw = bool(re.search(r'\brelative_install_path\s*:\s*"hw"|\bvintf_fragments\s*:', body))
         mods.append({'type': m.group(1), 'name': nm.group(1) if nm else '?',
-                     'line': _line_of(t, m.start()), 'deps': sorted(deps)[:80]})
+                     'line': _line_of(t, m.start()), 'deps': sorted(deps)[:80],
+                     'defaults': re.findall(r'"([^"]+)"', dm.group(1)) if dm else [], 'hw': hw})
     return mods
 
 
@@ -196,6 +201,8 @@ def mk_modules(text):
         s = line.strip()
         if re.match(r'include\s+\$\(CLEAR_VARS\)', s):
             cur = {'line': ln, 'deps': []}
+        elif re.match(r'LOCAL_MODULE_RELATIVE_PATH\s*:?=\s*hw\s*$|LOCAL_VINTF_FRAGMENTS\s*[:+]?=', s):
+            cur['hw'] = True
         elif re.match(r'LOCAL_MODULE\s*:?=', s):
             cur['name'] = s.split('=', 1)[1].strip()
             cur.setdefault('line', ln)
@@ -205,7 +212,7 @@ def mk_modules(text):
             m = re.match(r'include\s+\$\((BUILD_\w+|PREBUILT\w*)\)', s)
             if m and cur.get('name'):
                 mods.append({'type': m.group(1), 'name': cur['name'], 'line': cur.get('line', ln),
-                             'deps': sorted(set(cur.get('deps', [])))[:80]})
+                             'deps': sorted(set(cur.get('deps', [])))[:80], 'hw': cur.get('hw', False)})
                 cur = {}
     return mods
 

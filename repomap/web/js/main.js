@@ -1,7 +1,7 @@
 // Dieu khien: bam node -> nap du lieu theo tang, tim kiem, toolbar, khoi dong.
 
 import { $, esc, api, post, KIND_COLOR, store, SCRIPT } from './util.js';
-import { buildTree, visible, collapseAll, fillCat, loadMore, ensureChild,
+import { buildTree, collapseAll, fillCat, loadMore, ensureChild,
          attachInsight, attachDeep, attachRefs, attachScript, attachUserScript } from './tree.js';
 import { initGraph, render, refresh, centerOn, fit, resetView } from './graph.js';
 import { showPanel, bindPanel, togglePanel, initPanelResizer, resetPanelSize, scriptDirty, scriptStatusRefresh } from './panel.js';
@@ -55,11 +55,13 @@ async function clickNode(n, fresh = false) {
     case 'more': loadMore(n); render(); return;
     case 'goto': if (store.byRepo[n.target]) reveal(store.byRepo[n.target]); return;
     case 'repo':
-      if (!n.ins) {
+      if (!n.ins) {                                       // lan dau: thong tin nhanh + quet sau chay song song
         showPanel(n);
+        const deep = n.dp ? null : api('deep', { repo: n.path });
         n.ins = await api('insight', { repo: n.path });
         attachInsight(n, n.ins);
         n.open = true;
+        if (deep) deep.then(d => showDeep(n, d));
       } else n.open = again ? !n.open : true;
       break;
     case 'file':
@@ -93,14 +95,19 @@ async function clickNode(n, fresh = false) {
   if (store.sel === n) showPanel(n);
 }
 
-async function deepScan(n, btn) {
+// ket qua quet sau (toan bo file build/config) -> nhom file trong cay; panel ve lai, giu vi tri cuon
+function showDeep(n, d) {
+  n.dp = d;
+  attachDeep(n, d);
+  render();
+  if (store.sel === n) showPanel(n, true);
+}
+
+// nut Rescan (sau khi da quet): quet lai bo qua cache cua server
+async function rescan(n, btn) {
   btn.disabled = true;
   btn.textContent = t('scanning');
-  n.dp = await api('deep', { repo: n.path, force: n.dp ? 1 : 0 });
-  attachDeep(n, n.dp);
-  n.open = true;
-  render();
-  if (store.sel === n) showPanel(n);
+  showDeep(n, await api('deep', { repo: n.path, force: 1 }));
 }
 
 // ---------------------------------------------------------------- build script (repomap_build_script.sh)
@@ -112,7 +119,8 @@ const userScriptBase = value => {
   return name;
 };
 
-function askScriptName(initial = '') {
+// build=true: dang doi ten build script (duoc phep lay lai ten mac dinh repomap_build_script.sh)
+function askScriptName(initial = '', build = false) {
   const dialog = $('#script-name-dialog'), input = $('#script-name-input');
   const error = $('#script-name-error'), preview = $('#script-name-preview');
   const form = dialog.querySelector('form');
@@ -150,7 +158,7 @@ function askScriptName(initial = '') {
         input.focus();
         return;
       }
-      if (`repomap_${base}.sh`.toLowerCase() === SCRIPT.toLowerCase()) {
+      if (!build && `repomap_${base}.sh`.toLowerCase() === SCRIPT.toLowerCase()) {
         error.textContent = t('scriptNameReserved');
         error.hidden = false;
         input.focus();
@@ -180,11 +188,11 @@ async function scriptAction(what, btn) {
       btn.textContent = t('creating');
       const r = await post('script-create', { repo: n.path });
       if (r.error) { n.scErr = r.error; return showPanel(n, true); }
-      if (n.ins) n.ins.script = true;
-      sn = attachScript(n);
+      if (n.ins) n.ins.script = r.name;
+      sn = attachScript(n, r.name);
       sn.sc = r;
     }
-    sn = sn || attachScript(n);
+    sn = sn || attachScript(n, typeof n.ins?.script === 'string' ? n.ins.script : SCRIPT);
     n.open = true;
     render();
     return clickNode(sn, true);
@@ -208,12 +216,13 @@ async function scriptAction(what, btn) {
     render();
     return clickNode(sn, true);
   }
-  if (what === 'rename') {
-    if (!n.customScript) return;
-    const newName = await askScriptName(n.scriptName);
+  if (what === 'rename') {                             // script rieng va ca build script
+    if (!n.script) return;
+    if (scriptDirty(n)) await scriptAction('save', null);    // doi ten file da luu, khong mat phan dang sua
+    const oldName = n.scriptName || SCRIPT;
+    const newName = await askScriptName(oldName, !!n.buildScript);
     if (newName === null) return;
     if (btn) btn.disabled = true;
-    const oldName = n.scriptName;
     const r = await post('script-rename', { repo: n.repo, name: oldName, newName });
     if (btn) btn.disabled = false;
     if (r.error) { n.sc.saveErr = r.error; return scriptStatusRefresh(n); }
@@ -222,7 +231,8 @@ async function scriptAction(what, btn) {
     n.scriptName = n.f = n.label = r.name;
     n.sc.name = r.name;
     n.sc.saveErr = '';
-    repo.ins.scripts = (repo.ins.scripts || []).map(s => s.name === oldName ? { ...s, name: r.name, label: r.label } : s);
+    if (n.buildScript) repo.ins.script = r.name;
+    else repo.ins.scripts = (repo.ins.scripts || []).map(s => s.name === oldName ? { ...s, name: r.name, label: r.label } : s);
     const runs = store.builds?.[n.repo]?.scripts;
     if (runs) {
       delete runs[oldName];
@@ -310,7 +320,7 @@ addEventListener('beforeunload', e => {
 
 bindPanel({
   script: scriptAction,
-  deep: btn => deepScan(store.sel, btn),
+  deep: btn => rescan(store.sel, btn),
   open: it => {
     const s = store.sel;
     const host = s.type === 'repo' ? s.children.find(c => c.cid === 'keys') || s : s;
@@ -380,10 +390,17 @@ addEventListener('keydown', e => {
 $('#b-panel').onclick = togglePanel;
 $('#b-fit').onclick = fit;
 $('#b-collapse').onclick = () => { resetPanelSize(); collapseAll(store.root); render(); fit(); };
-$('#b-more').onclick = () => {
-  visible(store.root).filter(n => n.type === 'dir' && !n.open).forEach(n => (n.open = true));
+// thu gon node dang chon (ca cac nhanh con); node chon dang dong / la la thi thu gon node cha cua no
+$('#b-fold').onclick = () => {
+  let n = store.sel;
+  if (!n) return;
+  if (!n.open || !n.children.length) n = n.parent || n;
+  if (n === store.root) { collapseAll(store.root); select(n); render(); fit(); showPanel(n); return; }
+  (function shut(x) { x.open = false; x.children.forEach(shut); })(n);
+  select(n);
   render();
-  setTimeout(fit, 340);
+  centerOn(n, true);
+  showPanel(n);
 };
 
 function legend(repos) {

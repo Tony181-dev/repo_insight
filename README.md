@@ -43,9 +43,19 @@ Trên PC Windows có Python 3.8+, nhấp đúp `repomap-pc.cmd` (trong gói phá
 `python repomap.pyz --local`. Trình duyệt mở http://127.0.0.1:6960 với hai tab:
 
 - **Connect**: Configuration (SSH host/user/port, port server = port PC, mặc định 6969; chấm xanh/đỏ), *Quick setup*
-  (dán lệnh ssh), *Save preset*. Nút **Connect** mở cửa sổ ssh tunnel (gõ password ở đó) và tự mở trang repomap khi
-  server trả lời. Port trên PC đang bận thì báo ngay. Nút **Push to server** ngay bên dưới đẩy `repomap.pyz` +
-  `repomap.ini` vào `~/.bin`; trên server chạy `python3 ~/.bin/repomap.pyz` rồi chọn `1. Run scan`.
+  (dán lệnh ssh), *Save preset*.
+  - **Server folder** (ngay trên Push / Connect): nơi đặt `repomap.pyz` + `repomap.ini` trên server. Để trống = `~/.bin`
+    (gợi ý *default .bin folder*). Gõ **tên thư mục** (vd `tools`) = `~/tools`, cùng cấp với `~/.bin`: chưa có thì tạo,
+    có rồi thì chép đè vào. Gõ **đường dẫn** (`/opt/x`, `~/a/b`, `a/b`) = thư mục phải có sẵn, không có thì Push báo lỗi.
+  - **Push to server** chép 2 file vào thư mục đó (1 lần gõ password).
+  - **Connect** mở 1 cửa sổ ssh vừa làm tunnel vừa chạy `repomap.pyz` đã Push trên server, scan ngay workspace lần
+    trước (như chọn `1. Run scan`; lần đầu hỏi đường dẫn workspace ngay trong cửa sổ ssh) rồi tự mở trang repomap. Chỉ
+    cần thao tác trên trang PC. Nút đổi theo trạng thái: **Cancel** khi đang nối, **Disconnect** khi đã nối (đóng cửa
+    sổ ssh, repomap trên server dừng theo; còn script đang chạy thì hỏi lại). **Check connection** hỏi repomap qua
+    tunnel: phiên bản, workspace, số repo, script đang chạy, độ trễ.
+  - Không chạy trùng: đang nối thì Connect lần nữa bị từ chối; tunnel cũ (cửa sổ khác) còn trả lời thì dùng lại; trên
+    server, repomap của chính bạn đã chạy ở port đó thì dùng chung, của user / chương trình khác thì báo đổi port.
+    Chưa Push, thiếu `python3`, port bận... đều có thông báo riêng.
 - **Saved servers**: tối đa 5 preset, chọn một preset để điền vào Configuration.
 
 Cấu hình và preset của PC lưu ở `~/.config/repomap/local.json`. Trang tự tắt ~3 phút sau khi đóng tab.
@@ -56,7 +66,7 @@ Giao diện có nút **EN / VI** cạnh ô tìm kiếm (mặc định tiếng An
 
 Cách dễ nhất là menu `3. Quick setup` hoặc `2. Configuration`: nhập rồi lưu vào `~/.config/repomap/config.ini`
 (hoặc file cấu hình đang dùng), lần sau không phải nhập lại. File `repomap.ini` nằm cạnh `repomap.pyz` (được nút
-Push to server trong tab Connect đẩy lên `~/.bin`) cũng được đọc, sau `./repomap.ini`. Workspace quét lần trước cũng được nhớ. Cũng có thể sửa file bằng tay:
+Push to server trong tab Connect đẩy lên Server folder, mặc định `~/.bin`) cũng được đọc, sau `./repomap.ini`. Workspace quét lần trước cũng được nhớ. Cũng có thể sửa file bằng tay:
 
 ```sh
 repomap --init-config                 # tạo ~/.config/repomap/config.ini (có chú thích)
@@ -91,11 +101,18 @@ File được tìm theo thứ tự: `--config` > `$REPOMAP_CONFIG` > `./repomap.
 |---|---|---|
 | 0 | Khởi động | Đọc `.repo/manifest.xml` (include, local_manifests, remove/extend-project) → cây repo. Phân loại nhanh bằng file đánh dấu ở gốc repo. Không có manifest thì tìm thư mục `.git`. |
 | 1 | Bấm repo | Manifest, git HEAD, số file sửa; layer Yocto (collection, depends, machines…), kernel version/arch, BoardConfig/AndroidProducts, QNX variants, module ở gốc; danh sách file chính. |
-| 2 | Bấm **Quét sâu** | Toàn bộ file (`git ls-files`), gom nhóm: recipe/bbappend/machine/image, Android.bp/.mk + module, defconfig/dts/Kconfig, QNX buildfile/variant, CMake/Meson/Make… |
+| 2 | Bấm repo (chạy cùng tầng 1) | Toàn bộ file (`git ls-files`), gom nhóm: recipe/bbappend/machine/image, Android.bp/.mk + module, defconfig/dts/Kconfig, QNX buildfile/variant, CMake/Meson/Make… |
 | 3 | Bấm file | Biến, module/target, tham chiếu đã resolve: `require/include/inherit`, `inherit-product`, `#include` dts và C/C++, `source` Kconfig, `add_subdirectory`, recipe ↔ bbappend, `SRC_URI` → repo trong manifest, Python `import`, GitLab CI `include`, Ansible role/`import_tasks`, Terraform module. Bấm tiếp để đi sâu. |
 | + | Bấm **Open full source** | Ở panel repo (cả repo) hoặc file (thư mục của module): cây thư mục nạp lười + nội dung có tô màu, tìm file theo tên, tìm nội dung (`git grep`), bấm tham chiếu để nhảy file. **← Back** (hoặc Esc / nút Back của trình duyệt) quay lại cây. |
 | + | Bấm **Create build script** | Ở panel repo: tạo `repomap_build_script.sh` ở gốc repo, đoán lệnh build theo loại module (xem dưới). File hiện thành node màu vàng đầu nhánh repo; bấm vào để sửa và **Save** (Ctrl+S) ngay trên giao diện, **Regenerate** để sinh lại. |
-| + | Bấm **Create script** | Nhập tên để tạo tối đa 3 script trống trong mỗi repo; tool tự thêm tiền tố `repomap_` và đuôi `.sh`. Script hiện trên cây màu xanh ngọc (build script màu vàng), có thể đổi tên; bấm node để sửa, **Save** để lưu, **Run script** để chạy và **Stop** để dừng. Mỗi script có log riêng; **Clear log** xóa phần log cũ mà không dừng script đang chạy. |
+| + | Bấm **Create script** | Nhập tên để tạo tối đa 3 script trống trong mỗi repo; tool tự thêm tiền tố `repomap_` và đuôi `.sh`. Script hiện trên cây màu xanh ngọc (build script màu vàng); cả hai đổi tên được (**Rename**); bấm node để sửa, **Save** để lưu, **Run script** để chạy và **Stop** để dừng. Mỗi script có log riêng; **Clear log** xóa phần log cũ mà không dừng script đang chạy. |
+
+Trên cây: **Collapse node** thu gọn node đang chọn cùng mọi nhánh bên dưới (node đang đóng thì thu gọn node cha),
+**Collapse all** về lại cây ban đầu. Panel repo có **Rescan** để quét lại sau khi file đổi.
+
+Editor script tô màu bash (theme kiểu One Dark, có số dòng). Log tô màu theo dòng: lỗi (đỏ: `error:`, `ERROR:`,
+`make: *** ... Error 2`, Traceback, `command not found`…), cảnh báo (vàng), thành công (xanh lá), bước đang chạy (xanh
+dương: `==>`, `[ 42%]`, `NOTE:`). Đầu khung log đếm số lỗi / cảnh báo; bấm vào để nhảy tới dòng tiếp theo.
 
 ### Build script
 
@@ -111,7 +128,27 @@ File được tìm theo thứ tự: `--config` > `$REPOMAP_CONFIG` > `./repomap.
 
 Giá trị không tìm được để ở khối đầu file là `TODO`; script dừng với thông báo rõ nếu chưa điền. Cách build khác
 tìm thấy được ghi kèm ở cuối file (dạng comment). Tên file được thêm vào `.git/info/exclude` của repo nên không
-làm bẩn `git status`.
+làm bẩn `git status`. Đổi tên (**Rename**, vd `repomap_build_yocto.sh`): file vẫn là build script nhờ dòng
+`# repomap: build script` ở đầu (Save tự giữ dòng này), **Regenerate** ghi đè đúng file đó.
+
+### Block view
+
+Mỗi khối = 1 repo trong 1 tầng (App, Lib, HAL/nền tảng, External, Kernel, Board, Build). Cách xếp tầng và nối:
+
+- Gợi ý HAL theo đường dẫn / tên (`hal/`, `hardware/`, `drivers/`, `*-hal`…) chỉ áp dụng cho code native (C/C++,
+  Android, Yocto); `backend/`, `drivers/` trong project Python / npm / Go / Java vẫn ở tầng App / Lib.
+- Android: module cài vào `bin/hw` (`relative_install_path: "hw"`) hoặc có `vintf_fragments` → HAL; service trong
+  `.rc` chạy `/vendor/bin/hw/...`, `/vendor/...` → HAL / nền tảng. Phụ thuộc khai báo trong `cc_defaults` được tính
+  cho module dùng defaults; thư viện header-only và prebuilt trong workspace là component (không bị tính nhầm là thư
+  viện ngoài).
+- Container compose chỉ có `image:` (postgres, redis…) nằm ở tầng External; service systemd `Wants=/Requires=` nối
+  sang service kia; file `.rc` / `.service` ở repo A khởi chạy binary của repo B → đường nối *starts*.
+- Tên phụ thuộc chỉ khớp trong cùng hệ sinh thái (gói Python `venc` không nối nhầm sang binary C `venc`; tên gói
+  Python chuẩn hoá theo PEP 503; Go so cả đường dẫn module, bỏ `// indirect`); trùng tên thì ưu tiên cùng repo, rồi
+  thư viện trước chương trình.
+- Yocto: recipe build repo X có `DEPENDS`/`RDEPENDS` tới recipe build repo Y → X dùng Y; recipe `-native`,
+  `recipes-devtools` thuộc tầng Build.
+- Panel của khối: mỗi component ghi **Uses / Used by** theo từng component, bấm tên để nhảy tới khối bên kia.
 
 **▶ Run build** (trong editor của script) chạy file đó trên máy build bằng `bash -l` (lưu bản đang sửa trước),
 log hiện trực tiếp bên dưới; node script nhấp nháy trong cây khi đang build. Mỗi module chạy một build một lúc.

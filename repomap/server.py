@@ -14,10 +14,13 @@
   POST /api/build-start / build-stop / build-clear -> chay, dung, xoa log
   GET /api/build?repo=PATH&name=FILE&from=N -> trang thai + log tu byte N
   GET /api/builds                      -> trang thai script dang chay cua moi module
+  GET /api/ping                        -> repomap nao dang chay o port nay (PC Check connection, cli --connect)
 API ghi (POST) chi nhan tu chinh trang repomap cua user dang chay server: xem guard.py.
 """
+import getpass
 import json
 import mimetypes
+import os
 import pkgutil
 import posixpath
 import sys
@@ -27,7 +30,7 @@ from urllib.parse import parse_qs, urlparse
 from . import __version__
 from .arch import box_detail, build_arch, slim_arch
 from .builds import Builds
-from .buildscript import (SCRIPT, create_script, custom_scripts, has_script,
+from .buildscript import (SCRIPT, build_script_name, create_script, custom_scripts,
                           read_script, save_script)
 from .deepscan import deep_scan
 from .fileview import file_lines, file_view
@@ -92,13 +95,17 @@ def make_handler(ws, builds):
                 return self._send(ws.cached(('arch-slim',), lambda: slim_arch(full), force))
             if ep == 'builds':
                 return self._send(builds.summary())
+            if ep == 'ping':
+                running = sum(s['state'] == 'running' for b in builds.summary().values() for s in b['scripts'].values())
+                return self._send({'app': 'repomap', 'version': __version__, 'root': ws.root, 'repos': len(ws.repos),
+                                   'user': getpass.getuser(), 'pid': os.getpid(), 'running': running})
             if ep == 'archbox':
                 return self._send(box_detail(ws.cached(('arch',), lambda: build_arch(ws)), q.get('id', '')))
             if repo not in ws.by_path and not (ep in ('file', 'lines', 'ls') and repo == ''):
                 return self._send({'error': 'no such repo: ' + repo}, code=404)
             if ep == 'insight':
                 ins = ws.cached(('insight', repo), lambda: insight(ws, repo), force)
-                return self._send(dict(ins, script=has_script(ws, repo), scripts=custom_scripts(ws, repo)))
+                return self._send(dict(ins, script=build_script_name(ws, repo) or False, scripts=custom_scripts(ws, repo)))
             if ep == 'script':
                 return self._send(read_script(ws, repo, q.get('name') or SCRIPT))
             if ep == 'build':

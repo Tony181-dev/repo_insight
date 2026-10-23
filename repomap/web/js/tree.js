@@ -143,7 +143,7 @@ export function attachInsight(repo, ins) {
     keys.i18n = 'keyFilesCat';
     repo.children.unshift(keys);
   }
-  if (ins.script) attachScript(repo);
+  if (ins.script) attachScript(repo, ins.script === true ? SCRIPT : ins.script);
   (ins.scripts || []).forEach(s => attachUserScript(repo, s));
 }
 
@@ -154,11 +154,12 @@ export function attachDeep(repo, deep) {
   repo.children = [...kids.filter(c => c.grp === 'script' || c.grp === 'ins'), ...cats, ...kids.filter(c => !c.grp)];
 }
 
-// build script cua module (repomap_build_script.sh o goc repo): node file dau tien, to sang trong cay
-export function attachScript(repo) {
+// build script cua module (mac dinh repomap_build_script.sh o goc repo, doi ten duoc): node file dau tien, to sang
+export function attachScript(repo, name = SCRIPT) {
   let n = repo.children.find(c => c.buildScript);
   if (!n) {
-    n = node({ type: 'file', label: SCRIPT, f: SCRIPT, line: 0, grp: 'script', script: true, buildScript: true }, repo);
+    n = node({ type: 'file', label: name, f: name, line: 0, grp: 'script', script: true, buildScript: true,
+      scriptName: name }, repo);
     repo.children.unshift(n);
   }
   return n;
