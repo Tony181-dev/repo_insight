@@ -413,7 +413,7 @@ release.bat notest   <span class="c">rem bỏ qua unit test</span></pre></div>
     </div>
     <div>
       <h3>Chỉ cần file repomap.pyz</h3>
-      <div class="cmd"><pre>build.bat            <span class="c">rem tạo dist\repomap.pyz</span></pre></div>
+      <div class="cmd"><pre>py -3 tools\build_pyz.py --test   <span class="c">rem tạo dist\repomap.pyz (bỏ --test để không chạy test)</span></pre></div>
       <h3>Trên Linux</h3>
       <div class="cmd"><pre>make release                   <span class="c"># duy nhất một gói .zip</span>
 make pyz                       <span class="c"># chỉ repomap.pyz</span>

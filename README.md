@@ -248,7 +248,7 @@ Lưu ý: `repomap.pyz` là file zip chứa mã Python dạng text; giải nén r
 ## Đóng gói khác
 
 ```sh
-build.bat     # Windows: chỉ tạo dist\repomap.pyz (build.bat notest để bỏ test)
+py -3 tools\build_pyz.py --test   # Windows: chỉ tạo dist\repomap.pyz (bỏ --test để không chạy test)
 make pyz      # Linux: như trên (cùng dùng tools/build_pyz.py)
 make test     # unit test
 make wheel    # dist/repomap-*.whl - pip install được, có lệnh `repomap` (cần tải setuptools từ PyPI)
