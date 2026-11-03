@@ -2,6 +2,7 @@
 //   highlightLines(text, lang) -> mang HTML, moi phan tu 1 dong (token nhieu dong, vd /* */, duoc cat theo dong).
 
 import { esc } from './util.js';
+import { bashTokens } from './highlight_bash.js';
 
 const words = s => new Set(s.split(/\s+/));
 const KW = {
@@ -14,7 +15,6 @@ const KW = {
     'global if import in is lambda nonlocal not or pass raise return try while with yield self cls match case'),
   sh: words('if then else elif fi for while until do done case esac in function return local export source exit set ' +
     'unset shift readonly declare ifeq ifneq ifdef ifndef endif define endef include inherit require python'),
-  bash: words('if then else elif fi for while until do done case esac in function select time coproc'),
   groovy: words('def pipeline agent stages stage steps sh script when environment post always success failure node ' +
     'parallel return if else for in true false null import class new try catch'),
   tf: words('resource data module provider variable output locals terraform true false null for in if each count'),
@@ -24,15 +24,6 @@ const KW = {
   js: words('const let var function return if else for while do switch case break continue new this class extends ' +
     'import export from default async await try catch finally throw typeof instanceof true false null undefined'),
 };
-
-// bash: lenh dung san cua shell / cong cu build hay gap (to mau rieng de doc script de hon)
-const BASH_BUILTIN = words('echo printf cd pwd export source . set unset read local return exit shift trap eval exec ' +
-  'test true false declare readonly typeset wait kill pushd popd dirs type command builtin alias unalias let ulimit ' +
-  'umask getopts hash help jobs fg bg disown break continue mapfile readarray');
-const BASH_CMD = words('make bitbake cmake ninja meson git repo python python3 pip pip3 mkdir rm cp mv ln cat grep egrep ' +
-  'sed awk find xargs tar gzip unzip zip sudo docker podman gradle mvn npm npx yarn cargo go lunch mmm mm m croot ' +
-  'chmod chown touch head tail sort uniq wc tee curl wget ssh scp rsync env nproc sleep date basename dirname ' +
-  'realpath readlink install patch diff autoreconf configure qcc ntoaarch64-gcc gcc g++ clang ld ar strip adb fastboot');
 
 const STR = String.raw`"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'`;
 const NUM = String.raw`\b(?:0x[\da-fA-F]+|\d[\d_]*(?:\.\d+)?)[uUlLfF]*\b`;
@@ -47,14 +38,6 @@ const RULES = {
   py: [['cm', HASH_CM], ['st', String.raw`"""[\s\S]*?"""|'''[\s\S]*?'''`], ['st', STR], ['de', String.raw`@[\w.]+`],
     ['nu', NUM], ['id', ID]],
   sh: [['cm', HASH_CM], ['st', STR], ['va', VAR], ['nu', NUM], ['id', ID]],
-  // shebang, comment (khong phai ${#x} / $#), chuoi "" duoc phep nhieu dong (bien ben trong to mau rieng), '...',
-  // bien, ten ham, gan bien, tuy chon --x / -x, so, tu khoa / lenh, toan tu
-  bash: [['sb', String.raw`^#![^\n]*`], ['cm', String.raw`(?<![\w$\\{])#[^\n]*`],
-    ['st', String.raw`"(?:\\[\s\S]|[^"\\])*"|'[^']*'`],
-    ['va', String.raw`\$\{[^}\n]*\}|\$\((?:[^()\n]|\([^()\n]*\))*\)|\$(?:\w+|[@#?$!*-])`],
-    ['fn', String.raw`^[ \t]*(?:function[ \t]+)?[A-Za-z_][\w:.-]*(?=[ \t]*\(\))`],
-    ['as', String.raw`\b[A-Za-z_]\w*(?=\+?=)`], ['op', String.raw`(?<=[\s=])--?[A-Za-z][\w-]*`], ['nu', NUM],
-    ['id', String.raw`[A-Za-z_][\w.+-]*`], ['pu', String.raw`&&|\|\||[|;&]|>>?|<<?|\[\[|\]\]`]],
   yaml: [['cm', HASH_CM], ['ky', String.raw`^[ \t]*(?:-[ \t]+)?[\w.\-/"']+(?=[ \t]*:(?:\s|$))`], ['st', STR], ['va', VAR],
     ['nu', NUM], ['id', ID]],
   docker: [['cm', HASH_CM], ['st', STR], ['va', VAR], ['id', ID]],
@@ -84,21 +67,8 @@ export function langOf(path) {
   return 'text';
 }
 
-// "... $VAR ... $(cmd) ..." -> phan chuoi + bien (bash thay bien ben trong chuoi nhay kep)
-const IN_STR_VAR = new RegExp(VAR.replace(String.raw`\$\w+`, String.raw`\$(?:\w+|[@#?$!*-])`), 'g');
-function inString(s) {
-  const out = [];
-  let last = 0;
-  for (const m of s.matchAll(IN_STR_VAR)) {
-    if (m.index > last) out.push(['st', s.slice(last, m.index)]);
-    out.push(['va', m[0]]);
-    last = m.index + m[0].length;
-  }
-  if (last < s.length) out.push(['st', s.slice(last)]);
-  return out;
-}
-
 function tokens(text, lang) {
+  if (lang === 'bash') return bashTokens(text);
   const re = COMPILED[lang], rules = RULES[lang], kw = KW[lang === 'sh' ? 'sh' : lang];
   const out = [];
   if (!re) return [['', text]];
@@ -109,12 +79,8 @@ function tokens(text, lang) {
     if (m.index > last) out.push(['', text.slice(last, m.index)]);
     const g = m.findIndex((x, i) => i > 0 && x !== undefined);
     let cls = rules[g - 1][0];
-    if (cls === 'id') {
-      cls = kw && kw.has(m[0]) ? 'kw' : '';
-      if (!cls && lang === 'bash') cls = BASH_BUILTIN.has(m[0]) ? 'bi' : BASH_CMD.has(m[0]) ? 'cmd' : '';
-    }
-    if (cls === 'st' && lang === 'bash' && m[0][0] === '"') out.push(...inString(m[0]));
-    else out.push([cls, m[0]]);
+    if (cls === 'id') cls = kw && kw.has(m[0]) ? 'kw' : '';
+    out.push([cls, m[0]]);
     last = m.index + m[0].length;
   }
   if (last < text.length) out.push(['', text.slice(last)]);
@@ -122,11 +88,11 @@ function tokens(text, lang) {
 }
 
 export function highlightLines(text, lang = 'text') {
-  const lines = [''];
+  const lines = [''], prefix = lang === 'bash' ? 'bs-' : 'tk-';        // bash co bang mau rieng (style.css)
   for (const [cls, s] of tokens(text, lang)) {
     s.split('\n').forEach((part, i) => {
       if (i) lines.push('');
-      if (part) lines[lines.length - 1] += cls ? `<span class="tk-${cls}">${esc(part)}</span>` : esc(part);
+      if (part) lines[lines.length - 1] += cls ? `<span class="${prefix}${cls}">${esc(part)}</span>` : esc(part);
     });
   }
   return lines;

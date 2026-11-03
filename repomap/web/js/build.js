@@ -59,7 +59,7 @@ const RE = {
   err: new RegExp(LOC + String.raw`(?:fatal error|error)\b|^ERROR:|^E:\s|^FAILED\b|^FAIL\b|\*\*\* |\bError \d+\b|` +
     String.raw`^Traceback \(|\b(?:error|errors|failed|failure|fatal|panic|exception|segmentation fault|` +
     String.raw`undefined reference|no such file or directory|command not found|permission denied|cannot|` +
-    String.raw`could not|unable to|not found)\b`, 'i'),
+    String.raw`could not|unable to|not found|unsuccessful|not successful)\b`, 'i'),
   warn: new RegExp(LOC + String.raw`warning\b|^WARNING:|^W:\s|^WARN\b|\b(?:warning|warnings|deprecated)\b`, 'i'),
   good: /\b(?:0|no) (?:errors?|failures?|warnings?)\b/i,
   ok: /\b(?:success|successful|successfully|succeeded|passed|completed?|finished|built target|build succeeded)\b|^==> done\b|\bdone\.?$/i,
@@ -82,10 +82,24 @@ export function logClass(line) {
   return RE.step.test(s) ? 'step' : '';
 }
 
+// tu noi bat trong dong: output, va "build ... successfully" (ca cum), khong to xanh tren dong loi
+const WORDS = new RegExp(String.raw`(\boutputs?\b)|((?:\bbuil[dt](?:[ \t]+(?!not\b)[\w.-]+){0,3}?[ \t]+)?` +
+  String.raw`\b(?:success(?:ful(?:ly)?)?|succeeded)\b(?:[ \t]+buil[dt]\b)?)`, 'gi');
+
+function markWords(line, cls) {
+  let out = '', last = 0;
+  for (const m of line.matchAll(WORDS)) {
+    if (!m[1] && cls === 'err') continue;
+    out += esc(line.slice(last, m.index)) + `<mark class="lw-${m[1] ? 'out' : 'ok'}">${esc(m[0])}</mark>`;
+    last = m.index + m[0].length;
+  }
+  return out + esc(line.slice(last));
+}
+
 // moi dong 1 <span> (giu ca "\n" ben trong) de noi them log va dem loi / canh bao bang DOM
 export const logHtml = text => (text ? text.split(/(?<=\n)/) : []).map(line => {
   const c = logClass(line);
-  return c ? `<span class="lg-${c}">${esc(line)}</span>` : `<span>${esc(line)}</span>`;
+  return `<span${c ? ` class="lg-${c}"` : ''}>${markWords(line, c)}</span>`;
 }).join('');
 
 function appendLog(log, chunk) {

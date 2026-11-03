@@ -623,6 +623,63 @@ class BuildScriptTest(unittest.TestCase):
             st = subprocess.run(['git', 'status', '--porcelain'], cwd=d, capture_output=True, text=True).stdout
             self.assertNotIn('repomap_build_script.sh', st)
 
+    def test_response_is_one_socket_write(self):
+        """Header va body phai gui 1 lan (ghi 2 lan: tren Windows co luc client treo cho body)."""
+        from http.server import BaseHTTPRequestHandler
+        from repomap.util import send_whole
+        writes = []
+        h = BaseHTTPRequestHandler.__new__(BaseHTTPRequestHandler)
+        h.request_version, h.requestline, h.client_address = 'HTTP/1.0', 'GET / HTTP/1.0', ('127.0.0.1', 1)
+        h.log_message = lambda *a: None
+        h.wfile = type('W', (), {'write': staticmethod(writes.append)})()
+        send_whole(h, 200, 'text/plain', b'body')
+        self.assertEqual(len(writes), 1)
+        self.assertTrue(writes[0].startswith(b'HTTP/1.0 200'))
+        self.assertTrue(writes[0].endswith(b'\r\n\r\nbody'))
+        self.assertIn(b'Content-Length: 4', writes[0])
+
+    def test_script_limit_is_one_build_and_three_custom(self):
+        repo, ws = 'apps/venc', self.ws
+        buildscript.create_script(ws, repo)
+        for name in ('a', 'b', 'c'):
+            buildscript.create_empty_script(ws, repo, name)
+        with self.assertRaisesRegex(ValueError, '3 custom'):
+            buildscript.create_empty_script(ws, repo, 'd')
+        with self.assertRaisesRegex(ValueError, '3 custom'):            # Save khong duoc la cua sau tao file moi
+            buildscript.save_script(ws, repo, 'echo d\n', 'repomap_d.sh')
+        self.assertFalse(os.path.exists(buildscript.script_path(ws, repo, 'repomap_d.sh')))
+        buildscript.save_script(ws, repo, 'echo a\n', 'repomap_a.sh')   # sua file da co van duoc
+        buildscript.save_script(ws, repo, 'make\n')                     # build script khong tinh vao 3 script rieng
+        os.remove(buildscript.script_path(ws, repo, 'repomap_b.sh'))
+        buildscript.create_empty_script(ws, repo, 'd')                  # xoa ngoai tool thi cho tao lai
+        self.assertEqual(len(buildscript.custom_scripts(ws, repo)), buildscript.MAX_CUSTOM)
+
+    def test_delete_script_already_gone(self):
+        """File da bi xoa ngoai tool: Delete van thanh cong de go duoc khoi giao dien."""
+        repo, ws = 'apps/venc', self.ws
+        buildscript.create_empty_script(ws, repo, 'gone')
+        os.remove(buildscript.script_path(ws, repo, 'repomap_gone.sh'))
+        r = builds.Builds(ws).delete_script(repo, 'repomap_gone.sh')
+        self.assertTrue(r['deleted'])
+        with self.assertRaises(ValueError):
+            buildscript.delete_script(ws, repo, '../evil.sh')
+
+    def test_rescan_sees_scripts_changed_outside(self):
+        """insight luon doc lai danh sach script tu dia (phan con lai cua insight co cache)."""
+        srv = start_server(self.ws, '127.0.0.1', 0)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        url = 'http://127.0.0.1:%d/api/insight?repo=apps/venc' % srv.server_address[1]
+        names = lambda u: [s['name'] for s in json.load(urlopen(u))['scripts']]
+        try:
+            self.assertEqual(names(url), [])
+            buildscript.create_empty_script(self.ws, 'apps/venc', 'x')
+            self.assertEqual(names(url), ['repomap_x.sh'])
+            os.remove(buildscript.script_path(self.ws, 'apps/venc', 'repomap_x.sh'))
+            self.assertEqual(names(url + '&force=1'), [])
+        finally:
+            srv.shutdown()
+            srv.server_close()
+
     def test_server_api_and_guard(self):
         from urllib.error import HTTPError
         from urllib.request import Request

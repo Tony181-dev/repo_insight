@@ -147,6 +147,15 @@ export function attachInsight(repo, ins) {
   (ins.scripts || []).forEach(s => attachUserScript(repo, s));
 }
 
+// Quet lai: cay phai giong dia. Go nhom key files cu va node script khong con tren dia (keep(node): giu lai node con
+// ban nhap chua luu / dang chay, de con luu hoac dung duoc), roi gan lai theo ket qua moi.
+export function refreshInsight(repo, ins, keep) {
+  const names = new Set((ins.scripts || []).map(s => s.name));
+  const onDisk = c => (c.buildScript ? c.scriptName === ins.script : names.has(c.scriptName));
+  repo.children = repo.children.filter(c => (c.script ? onDisk(c) || keep(c) : c.grp !== 'ins'));
+  attachInsight(repo, ins);
+}
+
 export function attachDeep(repo, deep) {
   const kids = repo.children.filter(c => c.grp !== 'deep');
   if (deep.error) { repo.children = kids; return; }

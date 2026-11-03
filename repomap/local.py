@@ -41,6 +41,7 @@ from urllib.parse import urlparse
 from urllib.request import urlopen
 
 from . import __version__
+from .util import send_whole
 from .runtime import BUILD_ID, INSTANCE, identity, request_stop, stop_listener, wait_free
 from .server import Server, load_asset
 from .settings import (DEFAULT_PORT, Settings, app_archive, check_port, default_path, parse_ssh_command, port_busy,
@@ -507,12 +508,7 @@ def make_handler(jobs, srv_port, open_browser):
         def _send(self, data, ctype='application/json; charset=utf-8', code=200):
             if not isinstance(data, bytes):
                 data = json.dumps(data, ensure_ascii=False).encode('utf-8')
-            self.send_response(code)
-            self.send_header('Content-Type', ctype)
-            self.send_header('Content-Length', str(len(data)))
-            self.send_header('Cache-Control', 'no-store')
-            self.end_headers()
-            self.wfile.write(data)
+            send_whole(self, code, ctype, data)
 
         def _local(self):
             """Chi nhan request tu chinh trang nay (chan trang web khac / DNS rebinding goi vao)."""

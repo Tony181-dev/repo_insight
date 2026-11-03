@@ -1,7 +1,7 @@
 // Panel chi tiet ben phai: hien thong tin node dang chon.
 // Cac link trong panel mang data-a="..." va duoc xu ly tap trung qua bindPanel().
 
-import { $, esc, colorOf, KIND_COLOR, tail, store, SCRIPT } from './util.js';
+import { $, esc, colorOf, KIND_COLOR, tail, store, SCRIPT, MAX_CUSTOM } from './util.js';
 import { t, tl } from './i18n.js';
 import { labelOf } from './tree.js';
 import { createCodeView } from './codeview.js';
@@ -116,7 +116,7 @@ function dirPanel(n) {
 
 function repoPanel(n) {
   const i = n.ins, d = n.dp;
-  const scripts = i?.scripts || [], customLimit = scripts.length >= 3;
+  const scripts = i?.scripts || [], customLimit = scripts.length >= MAX_CUSTOM;
   let h = header(n, n.label, n.path)
     + tags((n.r.tags.length ? n.r.tags : [n.kind]).map(k => tag(k, KIND_COLOR[k])))
     + `<div class="btns">${d ? `<button data-a="deep" title="${esc(t('rescanTitle'))}">${t('rescan')}</button>` : ''}
@@ -125,7 +125,7 @@ function repoPanel(n) {
        <button class="script-btn" data-a="${i?.script ? 'script-open' : 'script-create'}"${!i || (!i.script && store.data.noEdit)
          ? ` disabled title="${esc(store.data.noEdit || '')}"` : ''}>${t(i?.script ? 'openBuildScript' : 'createBuildScript')}</button>
        <button class="script-btn" data-a="script-user-create"${!i || store.data.noEdit || customLimit
-         ? ` disabled title="${esc(customLimit ? t('scriptLimit') : store.data.noEdit || '')}"` : ''}>${t('createScript')} <span class="script-count">${scripts.length}/3</span></button></div>`
+         ? ` disabled title="${esc(customLimit ? t('scriptLimit') : store.data.noEdit || '')}"` : ''}>${t('createScript')} <span class="script-count">${scripts.length}/${MAX_CUSTOM}</span></button></div>`
     + (n.scErr ? `<div class="err">${esc(n.scErr)}</div>` : '');
 
   if (!i) return h + `<div class="load">${t('reading')}</div>`;
@@ -209,14 +209,19 @@ function scriptPanel(n) {
     + tags([tag(t(n.customScript ? 'userScript' : 'buildScript'), scriptColor),
       store.byRepo[n.repo] ? `<a class="tag lnk" data-a="repo" data-p="${esc(n.repo)}">${t('openRepo')}</a>` : '']);
   if (!s) return h + `<div class="load">${t('reading')}</div>`;
-  if (s.error) return h + `<div class="err">${esc(s.error)}</div>`;
   const [cls, msg] = scriptStatus(n), off = ro ? ' disabled' : '';
+  const del = `<button class="icon-btn delete-script" data-a="script-delete"${off} title="${esc(t('deleteScript'))}"
+        aria-label="${esc(t('deleteScript'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-.9 14H5.9L5 6m4 4v6m6-6v6"/></svg></button>`;
   const bd = n.bd, running = bd?.state === 'running', [bcls, bmsg] = statusText(bd, !!n.customScript), log = bd?.text || '';
+  // khong doc duoc file (node chi con lai khi script dang chay): van phai dung / xoa duoc
+  if (s.error) {
+    return h + `<div class="err">${esc(s.error)}</div><div class="btns">${del}
+      <button class="stop-btn" data-a="script-stop"${off}${running ? '' : ' hidden'}>${t('stopBuild')}</button></div>`;
+  }
   return h + `<div class="btns"><button class="pri" data-a="script-save"${off}>${t('save')}</button>
       ${n.customScript ? '' : `<button data-a="script-regen"${off}>${t('regenerate')}</button>`}
       <button data-a="script-rename"${off} title="${esc(t('renameHint'))}">${t('renameScript')}</button>
-      <button class="icon-btn delete-script" data-a="script-delete"${off} title="${esc(t('deleteScript'))}"
-        aria-label="${esc(t('deleteScript'))}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m3 0-.9 14H5.9L5 6m4 4v6m6-6v6"/></svg></button>
+      ${del}
       <span class="sc-st ${cls}" id="sc-st">${esc(msg)}</span>
       <span class="grow"></span>
       <button class="run-btn" data-a="script-run"${off}${running ? ' hidden' : ''}

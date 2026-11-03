@@ -115,11 +115,12 @@ File được tìm theo thứ tự: `--config` > `$REPOMAP_CONFIG` > `./repomap.
 | + | Bấm **Create script** | Nhập tên để tạo tối đa 3 script trống trong mỗi repo; tool tự thêm tiền tố `repomap_` và đuôi `.sh`. Script hiện trên cây màu xanh ngọc (build script màu vàng); cả hai đổi tên được (**Rename**); bấm node để sửa, **Save** để lưu, **Run script** để chạy và **Stop** để dừng. Mỗi script có log riêng; **Clear log** xóa phần log cũ mà không dừng script đang chạy. |
 
 Trên cây: **Collapse node** thu gọn node đang chọn cùng mọi nhánh bên dưới (node đang đóng thì thu gọn node cha),
-**Collapse all** về lại cây ban đầu. Panel repo có **Rescan** để quét lại sau khi file đổi.
+**Collapse all** về lại cây ban đầu. Panel repo có **Rescan** để quét lại sau khi file đổi: danh sách file, thông tin chính và script đều đọc lại từ đĩa, script đã bị xóa ngoài tool sẽ biến khỏi cây. Mỗi repo có 1 build script và tối đa 3 script riêng.
 
 Editor script tô màu bash (theme kiểu One Dark, có số dòng). Log tô màu theo dòng: lỗi (đỏ: `error:`, `ERROR:`,
 `make: *** ... Error 2`, Traceback, `command not found`…), cảnh báo (vàng), thành công (xanh lá), bước đang chạy (xanh
-dương: `==>`, `[ 42%]`, `NOTE:`). Đầu khung log đếm số lỗi / cảnh báo; bấm vào để nhảy tới dòng tiếp theo.
+dương: `==>`, `[ 42%]`, `NOTE:`). Trong dòng, từ `output` và các cụm như `Build completed successfully`,
+`BUILD SUCCESSFUL` được tô nổi bật (dòng lỗi không tô xanh). Đầu khung log đếm số lỗi / cảnh báo; bấm vào để nhảy tới dòng tiếp theo.
 
 ### Build script
 

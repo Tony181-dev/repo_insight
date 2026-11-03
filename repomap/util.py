@@ -1,4 +1,5 @@
-"""Tien ich nho dung chung: doc file, liet ke thu muc, goi git."""
+"""Tien ich nho dung chung: doc file, liet ke thu muc, goi git, tra loi HTTP."""
+import io
 import os
 import subprocess
 
@@ -34,6 +35,22 @@ def git(repo_dir, *args, timeout=20):
     except (OSError, subprocess.SubprocessError):
         return None
     return r.stdout.decode('utf-8', 'replace') if r.returncode == 0 else None
+
+
+def send_whole(handler, code, ctype, data):
+    """Tra loi HTTP: header + body gui trong 1 lan ghi socket. Ghi 2 lan thi tren Windows thinh thoang trinh duyet
+    nhan header roi treo cho body mai (trang trang, thieu file .js)."""
+    sock_out, handler.wfile = handler.wfile, io.BytesIO()
+    try:
+        handler.send_response(code)
+        handler.send_header('Content-Type', ctype)
+        handler.send_header('Content-Length', str(len(data)))
+        handler.send_header('Cache-Control', 'no-store')
+        handler.end_headers()
+        whole = handler.wfile.getvalue() + data
+    finally:
+        handler.wfile = sock_out
+    handler.wfile.write(whole)
 
 
 def bb_name(path):

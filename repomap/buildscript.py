@@ -20,6 +20,8 @@ MARKER = '# repomap: build script'
 USER_PREFIX = 'repomap_'
 USER_NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$')
 USER_SCRIPT = re.compile(r'^repomap_[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.sh$')
+MAX_CUSTOM = 3                               # moi repo: 1 build script + toi da 3 script rieng
+LIMIT_MSG = 'A repo can have 1 build script and up to %d custom scripts.' % MAX_CUSTOM
 MAX_SIZE = 256 * 1024
 
 
@@ -90,8 +92,8 @@ def delete_script(ws, repo, name=SCRIPT):
     path = script_path(ws, repo, name)
     try:
         os.remove(path)
-    except FileNotFoundError:
-        raise ValueError('%s not found in %s' % (name, repo or '.'))
+    except FileNotFoundError:                    # da bi xoa ngoai tool: ket qua van la khong con file
+        pass
     return {'repo': repo, 'name': name, 'deleted': True}
 
 
@@ -100,6 +102,8 @@ def save_script(ws, repo, text, name=SCRIPT):
     if len(text.encode('utf-8')) > MAX_SIZE:
         raise ValueError('script is too big (max %d KB)' % (MAX_SIZE // 1024))
     path = script_path(ws, repo, name)
+    if name != SCRIPT and not os.path.isfile(path) and len(custom_scripts(ws, repo)) >= MAX_CUSTOM:
+        raise ValueError(LIMIT_MSG)                                # Save tao lai file da mat: van tinh gioi han
     if name != SCRIPT and name == build_script_name(ws, repo):     # build script da doi ten: giu dong MARKER
         text = _with_marker(text)
     with open(path, 'w', encoding='utf-8', newline='\n') as f:
@@ -135,8 +139,8 @@ def custom_scripts(ws, repo):
 def create_empty_script(ws, repo, name):
     name = normalize_user_script_name(name)
     existing = custom_scripts(ws, repo)
-    if len(existing) >= 3:
-        raise ValueError('A repo can have up to 3 custom scripts.')
+    if len(existing) >= MAX_CUSTOM:
+        raise ValueError(LIMIT_MSG)
     if any(s['name'].casefold() == name.casefold() for s in existing):
         raise ValueError('%s already exists in %s' % (name, repo or '.'))
     path = script_path(ws, repo, name)

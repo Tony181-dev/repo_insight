@@ -39,6 +39,7 @@ from .guard import write_denied
 from .insight import insight
 from .source import list_dir, search
 from .runtime import identity, INSTANCE
+from .util import send_whole
 
 
 def load_asset(path):
@@ -62,12 +63,7 @@ def make_handler(ws, builds):
         def _send(self, data, ctype='application/json; charset=utf-8', code=200):
             if not isinstance(data, bytes):
                 data = json.dumps(data, ensure_ascii=False).encode('utf-8')
-            self.send_response(code)
-            self.send_header('Content-Type', ctype)
-            self.send_header('Content-Length', str(len(data)))
-            self.send_header('Cache-Control', 'no-store')
-            self.end_headers()
-            self.wfile.write(data)
+            send_whole(self, code, ctype, data)
 
         def do_GET(self):
             u = urlparse(self.path)

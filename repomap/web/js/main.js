@@ -2,13 +2,13 @@
 
 import { $, esc, api, post, KIND_COLOR, store, SCRIPT } from './util.js';
 import { buildTree, collapseAll, fillCat, loadMore, ensureChild,
-         attachInsight, attachDeep, attachRefs, attachScript, attachUserScript } from './tree.js';
+         attachInsight, refreshInsight, attachDeep, attachRefs, attachScript, attachUserScript } from './tree.js';
 import { initGraph, render, refresh, centerOn, fit, resetView } from './graph.js';
 import { showPanel, bindPanel, togglePanel, initPanelResizer, resetPanelSize, scriptDirty, scriptStatusRefresh } from './panel.js';
 import { t, applyStatic, setLang, onLangChange } from './i18n.js';
 import { initSource, openSource } from './source.js';
 import { initArch, showArch, hideArch, archRefresh, archFocusRepo } from './arch.js';
-import { initBuild, poll as pollBuild, startBuild, stopBuild, clearBuildLog } from './build.js';
+import { initBuild, poll as pollBuild, startBuild, stopBuild, clearBuildLog, isRunning } from './build.js';
 
 // ---------------------------------------------------------------- chon / mo node
 
@@ -55,6 +55,7 @@ async function clickNode(n, fresh = false) {
     case 'more': loadMore(n); render(); return;
     case 'goto': if (store.byRepo[n.target]) reveal(store.byRepo[n.target]); return;
     case 'repo':
+      n.scErr = '';
       if (!n.ins) {                                       // lan dau: thong tin nhanh + quet sau chay song song
         showPanel(n);
         const deep = n.dp ? null : api('deep', { repo: n.path });
@@ -69,6 +70,7 @@ async function clickNode(n, fresh = false) {
         if (!n.sc || (!scriptDirty(n) && !fresh)) {
           showPanel(n);
           n.sc = await api('script', { repo: n.repo, name: n.scriptName || SCRIPT });
+          if (n.sc.error && await dropIfGone(n)) return;
         }
         render();
         centerOn(n, true);
@@ -103,11 +105,39 @@ function showDeep(n, d) {
   if (store.sel === n) showPanel(n, true);
 }
 
-// nut Rescan (sau khi da quet): quet lai bo qua cache cua server
+// ket qua insight moi -> cay dong bo voi dia (script bi xoa / them ngoai tool). Node con ban nhap chua luu hoac dang
+// chay van giu de luu / dung duoc. Loi doc (mat ket noi): giu nguyen, khong go nham script.
+function applyInsight(n, ins) {
+  if (ins.error) return;
+  n.ins = ins;
+  refreshInsight(n, ins, c => scriptDirty(c) || isRunning(c.repo, c.scriptName));
+  const sel = store.sel;
+  if (sel?.script && sel.repo === n.path && !n.children.includes(sel)) select(n);
+}
+
+// nut Rescan (sau khi da quet): quet lai ca insight + quet sau, bo qua cache cua server
 async function rescan(n, btn) {
   btn.disabled = true;
   btn.textContent = t('scanning');
-  showDeep(n, await api('deep', { repo: n.path, force: 1 }));
+  n.scErr = '';
+  const [ins, deep] = await Promise.all([api('insight', { repo: n.path, force: 1 }), api('deep', { repo: n.path, force: 1 })]);
+  applyInsight(n, ins);
+  showDeep(n, deep);
+}
+
+// file script khong doc / chay / doi ten duoc: neu no thuc su khong con tren dia thi go node, ve panel repo va bao ro.
+// Tra ve true neu da go.
+async function dropIfGone(n) {
+  const repo = store.byRepo[n.repo];
+  if (!repo) return false;
+  applyInsight(repo, await api('insight', { repo: n.repo }));
+  if (repo.children.includes(n)) return false;
+  repo.scErr = t('scriptGone', { name: n.scriptName });
+  select(repo);
+  render();
+  centerOn(repo, true);
+  showPanel(repo, true);
+  return true;
 }
 
 // ---------------------------------------------------------------- build script (repomap_build_script.sh)
@@ -207,7 +237,12 @@ async function scriptAction(what, btn) {
     btn.textContent = t('creating');
     const r = await post('script-empty-create', { repo: repo.path, name });
     btn.disabled = false;
-    if (r.error) { repo.scErr = r.error; return showPanel(repo, true); }
+    if (r.error) {                                     // vd da du script: cay co the dang cu hon dia
+      applyInsight(repo, await api('insight', { repo: repo.path }));
+      repo.scErr = r.error;
+      render();
+      return showPanel(repo, true);
+    }
     repo.ins.scripts ||= [];
     repo.ins.scripts.push({ name: r.name, label: r.label });
     const sn = attachUserScript(repo, r);
@@ -225,7 +260,11 @@ async function scriptAction(what, btn) {
     if (btn) btn.disabled = true;
     const r = await post('script-rename', { repo: n.repo, name: oldName, newName });
     if (btn) btn.disabled = false;
-    if (r.error) { n.sc.saveErr = r.error; return scriptStatusRefresh(n); }
+    if (r.error) {
+      if (await dropIfGone(n)) return;
+      n.sc.saveErr = r.error;
+      return scriptStatusRefresh(n);
+    }
     if (r.name === oldName) return;
     const repo = store.byRepo[n.repo];
     n.scriptName = n.f = n.label = r.name;
@@ -309,6 +348,7 @@ async function runAction(n, what, btn) {
   if (what === 'run' && n.sc.saveErr) r = { error: n.sc.saveErr };
   else r = what === 'run' ? await startBuild(n) : await stopBuild(n);
   btn.disabled = false;
+  if (r.error && await dropIfGone(n)) return;
   if (r.error) { n.bd = { ...(n.bd || { text: '', next: 0 }), error: r.error }; }
   if (store.sel === n) showPanel(n, true);
 }

@@ -29,6 +29,7 @@ export async function post(endpoint, body) {
 }
 
 export const SCRIPT = 'repomap_build_script.sh';
+export const MAX_CUSTOM = 3;            // moi repo: 1 build script + toi da 3 script rieng (buildscript.py MAX_CUSTOM)
 
 export const KIND_COLOR = {
   'yocto-layer': '#f0a530', 'yocto-multi': '#e8862a', 'bitbake': '#ff6b3d', 'kernel': '#f05252',
